@@ -86,12 +86,47 @@
       try { localStorage.setItem("theme", r.dataset.theme); } catch (e) {}
     });
     // dropdowns
+    // Menus are positioned against the viewport so a scrolling table never clips them.
+    const placeMenu = (btn, m) => {
+      const r = btn.getBoundingClientRect(), gap = 6, pad = 8;
+      m.style.position = "fixed";
+      m.style.right = Math.max(pad, window.innerWidth - r.right) + "px";
+      m.style.left = "auto";
+      m.style.maxHeight = "";
+      const h = m.offsetHeight, below = window.innerHeight - r.bottom - gap - pad, above = r.top - gap - pad;
+      if (h <= below || below >= above) {
+        m.style.top = (r.bottom + gap) + "px";
+        if (h > below) m.style.maxHeight = below + "px";
+      } else {
+        m.style.top = Math.max(pad, r.top - gap - Math.min(h, above)) + "px";
+        if (h > above) m.style.maxHeight = above + "px";
+      }
+    };
+    let openDd = null;
+    const closeMenus = (except) => {
+      $$(".dropdown-menu").forEach((m) => { if (m !== except) m.hidden = true; });
+      if (!except) openDd = null;
+    };
     document.addEventListener("click", (e) => {
       const btn = e.target.closest("[data-dd]");
-      $$(".dropdown-menu").forEach((m) => { if (!btn || m !== btn.nextElementSibling) m.hidden = true; });
-      if (btn) { const m = btn.nextElementSibling; m.hidden = !m.hidden; e.stopPropagation(); }
-      else if (!e.target.closest(".dropdown-menu")) $$(".dropdown-menu").forEach((m) => { m.hidden = true; });
+      if (btn) {
+        const m = btn.nextElementSibling;
+        closeMenus(m);
+        m.hidden = !m.hidden;
+        openDd = m.hidden ? null : [btn, m];
+        if (openDd) placeMenu(btn, m);
+        e.stopPropagation();
+      } else if (!e.target.closest(".dropdown-menu")) closeMenus();
     });
+    // Follow the button while the page or a table scrolls; close once the button is out of view.
+    const followMenu = (e) => {
+      if (!openDd || (e && e.target instanceof Element && e.target.closest(".dropdown-menu"))) return;
+      const r = openDd[0].getBoundingClientRect();
+      if (r.bottom < 0 || r.top > window.innerHeight || r.width === 0) closeMenus();
+      else placeMenu(openDd[0], openDd[1]);
+    };
+    window.addEventListener("resize", followMenu);
+    document.addEventListener("scroll", followMenu, true);
     // confirm on forms
     $$("form[data-confirm]").forEach((f) => f.addEventListener("submit", async (e) => {
       if (f.dataset.ok) return;
