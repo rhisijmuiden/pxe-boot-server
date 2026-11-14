@@ -76,4 +76,19 @@ install -m 644 "$REPO/deploy/dnsmasq-override.conf" /etc/systemd/system/dnsmasq.
 systemctl daemon-reload
 systemctl enable -q pxe-boot-server pxe-boot-vlans dnsmasq
 
+# Existing install: run database migrations and re-apply the PXE configuration when the
+# new code renders it differently (for example a changed default boot file).
+if [ -f /var/lib/pxe-boot-server/app.db ]; then
+  step "PXE configuration"
+  (cd "$REPO" && sudo -u "$APP_USER" env PYTHONDONTWRITEBYTECODE=1 "$REPO/venv/bin/python" - <<'PY'
+from app import config, db, dnsmasq
+db.migrate()
+old = config.DNSMASQ_STAGING.read_text() if config.DNSMASQ_STAGING.exists() else ""
+if old and dnsmasq.render() != old:
+    dnsmasq.apply()
+    print("dnsmasq configuration updated")
+PY
+  ) || echo "warning: could not re-apply the PXE configuration; open Network & PXE and click Apply" >&2
+fi
+
 echo "-- post-update done ($(cat "$REPO/VERSION"))"

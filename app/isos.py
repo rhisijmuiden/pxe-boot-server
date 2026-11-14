@@ -123,7 +123,7 @@ def detect(root: Path) -> Detection:
     if wim and bcd and sdi:
         info = {"wim": wim, "bcd": bcd, "sdi": sdi, "bootmgr": f("bootmgr") or "",
                 "setup": f("setup.exe") or f("sources/setup.exe") or "",
-                "install": f("sources/install.wim") or f("sources/install.esd") or ""}
+                "install": f("sources/install.wim") or f("sources/install.esd") or f("sources/install.swm") or ""}
         name = ""
         if info["install"]:
             name = "Windows"
@@ -214,6 +214,30 @@ def get(iso_id: int):
 
 def iso_info(row) -> dict:
     return json.loads(row["info"] or "{}")
+
+
+PATH_KEYS = ("wim", "bcd", "sdi", "bootmgr", "setup", "kernel", "initrd", "squashfs")
+
+
+def missing_files(row) -> list[str]:
+    """Boot files recorded at detection time that cannot be found in the mount right now."""
+    root = mount_dir(row["id"])
+    info = iso_info(row)
+    return [info[k] for k in PATH_KEYS if info.get(k) and not (root / info[k]).is_file()]
+
+
+def ensure_ready(row):
+    """Called right before a client boots an ISO. Mounts it when needed and, when the recorded
+    paths no longer match the mount (case differs between the UDF and ISO 9660 views, or the
+    mount is gone), mounts and detects again. Returns the fresh row."""
+    if row is None:
+        return None
+    if is_mounted(row["id"]) and not missing_files(row):
+        return row
+    log.warning("ISO %s: boot files not found (%s), mounting and detecting again",
+                row["id"], ", ".join(missing_files(row)) or "not mounted")
+    process(row["id"])
+    return get(row["id"])
 
 
 def process(iso_id: int) -> None:

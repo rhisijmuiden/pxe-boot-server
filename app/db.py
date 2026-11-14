@@ -90,6 +90,11 @@ SCHEMA = [
         expires REAL NOT NULL
     );
     """,
+    # version 2: UEFI clients use snponly.efi. ipxe.efi takes over the hardware with its own
+    # drivers, and on many PCs the USB keyboard then stops working in the boot menu.
+    """
+    UPDATE settings SET value='"snponly.efi"' WHERE key='uefi_loader' AND value='"ipxe.efi"';
+    """,
 ]
 
 
@@ -137,7 +142,7 @@ DEFAULTS: dict[str, Any] = {
     "dhcp_gateway": "",
     "dhcp_dns": "",
     "dhcp_lease": "12h",
-    "uefi_loader": "ipxe.efi",  # ipxe.efi | snponly.efi
+    "uefi_loader": "snponly.efi",  # snponly.efi (firmware drivers, keyboard keeps working) | ipxe.efi
     "menu_timeout": 30,
     "menu_default": "local",   # "local" or iso id
     "menu_title": "",

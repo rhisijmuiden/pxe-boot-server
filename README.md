@@ -59,7 +59,7 @@ Running the installer again is safe; it updates the code and the configuration.
 ## How it works
 
 ```
-client firmware ──PXE/DHCP──▶ dnsmasq (proxy DHCP) ──TFTP──▶ iPXE (undionly.kpxe / ipxe.efi)
+client firmware ──PXE/DHCP──▶ dnsmasq (proxy DHCP) ──TFTP──▶ iPXE (undionly.kpxe / snponly.efi)
 iPXE ──HTTP──▶ /ipxe/boot.ipxe ─▶ menu ─▶ chosen ISO
   Windows : wimboot + boot.wim, Setup reads \\server\pxe over SMB
   Linux   : kernel + initrd from the mounted ISO over HTTP

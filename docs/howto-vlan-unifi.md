@@ -13,7 +13,7 @@ Clients talk to the server's address in their own VLAN, so traffic is not routed
 ## Option B: UniFi Network Boot (DHCP option 66/67)
 
 1. In UniFi Network go to **Settings > Networks**, open the client network, and under **DHCP** enable **Network Boot** (in some versions under "Advanced" or "DHCP Service Management").
-2. Server: `<server-ip>`. Filename: `ipxe.efi` for UEFI clients, or `undionly.kpxe` for Legacy BIOS clients.
+2. Server: `<server-ip>`. Filename: `snponly.efi` for UEFI clients, or `undionly.kpxe` for Legacy BIOS clients.
 3. Add the firewall rules below so the network can reach this server.
 
 UniFi sends one file name to every client on that network, so a network uses either UEFI or Legacy BIOS. Most current hardware is UEFI. Our iPXE files include a script that reads the boot server from *next-server*, so there is no chainload loop.

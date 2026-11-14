@@ -193,6 +193,13 @@ def ipxe_menu(request: Request):
 
 def _boot(request: Request, row, ctx: dict, ans, auto: bool = False) -> str:
     ip = client_ip(request)
+    row = isos.ensure_ready(row)
+    missing = isos.missing_files(row) if row is not None and row["status"] == "ready" else ["(ISO not mounted)"]
+    if missing:
+        return ipxe.error_script(
+            "Files missing in the mounted ISO: " + ", ".join(missing)[:200] +
+            ". Open the ISO library and choose Detect again.",
+            ipxe.base(host_ip(request)), ipxe.client_query(ctx))
     platform_name = "UEFI" if ctx["platform"] == "efi" else "BIOS"
     c = live.touch(ip, "loading", mac=ctx["mac"], platform=platform_name, iso_id=row["id"], iso_name=row["name"],
                    answer_id=ans["id"] if ans else None, answer_name=ans["name"] if ans else "")
@@ -822,7 +829,7 @@ async def network_save(request: Request):
     db.set_setting("dhcp_mode", "full" if form.get("dhcp_mode") == "full" else "proxy")
     for k in ("dhcp_range_start", "dhcp_range_end", "dhcp_gateway", "dhcp_dns", "dhcp_lease"):
         db.set_setting(k, str(form.get(k, "")).strip())
-    db.set_setting("uefi_loader", "snponly.efi" if form.get("uefi_loader") == "snponly.efi" else "ipxe.efi")
+    db.set_setting("uefi_loader", "ipxe.efi" if form.get("uefi_loader") == "ipxe.efi" else "snponly.efi")
     err = dnsmasq.validate_full_range()
     if err:
         flash(request, err, "error")

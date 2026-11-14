@@ -52,3 +52,28 @@ def test_embedded_script_exits_after_menu():
     embed = (Path(__file__).resolve().parent.parent / "ipxe" / "embed.ipxe").read_text().splitlines()
     chain = next(i for i, line in enumerate(embed) if "/ipxe/boot.ipxe" in line)
     assert "exit 0" in [x.strip() for x in embed[chain + 1:chain + 3]]
+
+
+def test_windows_paths_follow_the_mount_case(iso_row):
+    """Recorded paths that no longer match the mount (UDF vs ISO 9660 case) are detected again."""
+    import shutil
+    from app import config, isos
+    row = iso_row({"sources/boot.wim": "", "boot/bcd": "", "boot/boot.sdi": "", "setup.exe": ""})
+    root = config.MNT_DIR / str(row["id"])
+    shutil.move(root / "boot" / "bcd", root / "boot" / "BCD")
+    assert isos.missing_files(row) == ["boot/bcd"]
+    fresh = isos.ensure_ready(row)
+    assert isos.iso_info(fresh)["bcd"] == "boot/BCD"
+    s = ipxe.boot_script("10.0.0.5", fresh, CTX)
+    assert f"/mnt/{row['id']}/boot/BCD" in s
+
+
+def test_boot_endpoint_reports_missing_files(iso_row):
+    from fastapi.testclient import TestClient
+    from app import config
+    from app.main import app
+    row = iso_row({"sources/boot.wim": "", "boot/bcd": "", "boot/boot.sdi": "", "setup.exe": ""})
+    (config.MNT_DIR / str(row["id"]) / "sources" / "boot.wim").unlink()
+    r = TestClient(app).get(f"/ipxe/iso/{row['id']}.ipxe", headers={"host": "10.0.0.5"})
+    assert r.status_code == 200
+    assert "kernel" not in r.text and "boot.wim" not in r.text.split("Files missing")[0]

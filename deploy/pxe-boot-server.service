@@ -14,8 +14,8 @@ ExecStart=/opt/pxe-boot-server/venv/bin/uvicorn app.main:app --host 127.0.0.1 --
 Restart=on-failure
 RestartSec=3
 # The app calls bin/pxe-helper through sudo, so NoNewPrivileges must stay off.
-PrivateTmp=true
-ProtectHome=true
+# No PrivateTmp/ProtectHome: they give the service its own mount namespace, and ISO mounts
+# made from there would be invisible to nginx and Samba.
 
 [Install]
 WantedBy=multi-user.target
