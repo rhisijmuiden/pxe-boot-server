@@ -13,7 +13,7 @@ Clients praten met het adres van de server in hun eigen VLAN. Het verkeer gaat d
 ## Optie B: UniFi Network Boot (DHCP-optie 66/67)
 
 1. Ga in UniFi Network naar **Settings > Networks**, open het netwerk van de clients en zet onder **DHCP** de optie **Network Boot** aan (in sommige versies onder "Advanced" of "DHCP Service Management").
-2. Server: `<server-ip>`. Bestandsnaam: `ipxe.efi` voor UEFI-clients, of `undionly.kpxe` voor Legacy BIOS-clients.
+2. Server: `<server-ip>`. Bestandsnaam: `snponly.efi` voor UEFI-clients, of `undionly.kpxe` voor Legacy BIOS-clients.
 3. Voeg de firewallregels hieronder toe zodat het netwerk deze server kan bereiken.
 
 UniFi geeft elke client in dat netwerk dezelfde bestandsnaam, dus een netwerk gebruikt óf UEFI óf Legacy BIOS. De meeste huidige hardware is UEFI. Onze iPXE-bestanden bevatten een script dat de bootserver uit *next-server* haalt, dus er ontstaat geen lus.

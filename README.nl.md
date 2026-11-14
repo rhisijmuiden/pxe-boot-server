@@ -59,7 +59,7 @@ Je kunt de installer veilig opnieuw draaien; hij werkt dan de code en de configu
 ## Zo werkt het
 
 ```
-firmware client ──PXE/DHCP──▶ dnsmasq (proxy DHCP) ──TFTP──▶ iPXE (undionly.kpxe / ipxe.efi)
+firmware client ──PXE/DHCP──▶ dnsmasq (proxy DHCP) ──TFTP──▶ iPXE (undionly.kpxe / snponly.efi)
 iPXE ──HTTP──▶ /ipxe/boot.ipxe ─▶ menu ─▶ gekozen ISO
   Windows : wimboot + boot.wim, Setup leest \\server\pxe via SMB
   Linux   : kernel + initrd uit de gekoppelde ISO via HTTP

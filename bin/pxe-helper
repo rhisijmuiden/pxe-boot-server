@@ -27,6 +27,16 @@ is_ifname() { [[ "$1" =~ ^[A-Za-z0-9_-]{1,12}$ ]] && [ -e "/sys/class/net/$1" ];
 is_channel() { [[ "$1" == main || "$1" == test ]]; }
 git_repo() { git -c safe.directory="$REPO" -C "$REPO" "$@"; }
 
+# Mounts must live in the system's mount namespace, where nginx and Samba look. When the
+# helper runs inside a service with its own namespace, step out to PID 1's namespace first.
+host() {
+  if [ "$(readlink /proc/1/ns/mnt 2>/dev/null)" != "$(readlink /proc/self/ns/mnt 2>/dev/null)" ]; then
+    nsenter -t 1 -m -- "$@"
+  else
+    "$@"
+  fi
+}
+
 cmd_mount() {
   local rel="${1:?relpath}" id="${2:?id}"
   is_id "$id" || die "bad id"
@@ -35,17 +45,17 @@ cmd_mount() {
   [[ "$iso" == "$ISO_DIR"/* && -f "$iso" ]] || die "ISO outside library"
   local dir="$MNT_DIR/$id"
   mkdir -p "$dir"
-  mountpoint -q "$dir" && return 0
+  host mountpoint -q "$dir" && return 0
   # UDF first: Windows ISOs only show a stub README through ISO 9660.
-  mount -t udf -o loop,ro,nodev,nosuid,noexec -- "$iso" "$dir" 2>/dev/null || \
-    mount -o loop,ro,nodev,nosuid,noexec -- "$iso" "$dir"
+  host mount -t udf -o loop,ro,nodev,nosuid,noexec -- "$iso" "$dir" 2>/dev/null || \
+    host mount -o loop,ro,nodev,nosuid,noexec -- "$iso" "$dir"
 }
 
 cmd_umount() {
   local id="${1:?id}"
   is_id "$id" || die "bad id"
   local dir="$MNT_DIR/$id"
-  if mountpoint -q "$dir"; then umount "$dir" 2>/dev/null || umount -l "$dir"; fi
+  if host mountpoint -q "$dir"; then host umount "$dir" 2>/dev/null || host umount -l "$dir"; fi
   rmdir "$dir" 2>/dev/null || true
 }
 

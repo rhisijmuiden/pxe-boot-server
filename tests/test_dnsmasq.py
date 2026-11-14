@@ -32,3 +32,19 @@ def test_no_inline_comments():
     for line in dnsmasq.render().splitlines():
         if line and not line.startswith("#"):
             assert " #" not in line, line
+
+
+def test_uefi_default_is_snponly():
+    # ipxe.efi takes over USB on many PCs, so the keyboard stops working in the menu
+    s = dnsmasq.render()
+    assert 'pxe-service=X86-64_EFI,"Network boot (UEFI)",snponly.efi' in s
+
+
+def test_migration_moves_ipxe_efi_to_snponly(tmp_path):
+    import sqlite3
+    conn = sqlite3.connect(tmp_path / "old.db")
+    conn.executescript(db.SCHEMA[0] + "PRAGMA user_version=1;")
+    conn.execute("INSERT INTO settings(key,value) VALUES('uefi_loader','\"ipxe.efi\"')")
+    for i, script in enumerate(db.SCHEMA[1:], start=2):
+        conn.executescript("BEGIN;" + script + f"PRAGMA user_version={i};COMMIT;")
+    assert conn.execute("SELECT value FROM settings WHERE key='uefi_loader'").fetchone()[0] == '"snponly.efi"'
