@@ -1,4 +1,5 @@
 /* PXE Boot Server - RHIS huisstijl. Tokens follow branding/tokens/tokens.css. */
+[hidden]{display:none!important}
 @font-face{font-family:"Archivo";font-style:normal;font-weight:100 900;font-stretch:62% 125%;font-display:swap;src:url("../fonts/archivo-latin.woff2") format("woff2")}
 
 /* Layout: admin shell, fixed left sidebar on raised surface, content on surface. RHIS tokens. */
@@ -61,7 +62,7 @@ button,input,select{font:inherit;color:inherit}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px;background:var(--raised)}
 .seg button{border:0;background:none;border-radius:999px;padding:4px 11px;font-size:.8rem;font-weight:700;cursor:pointer;color:var(--muted)}
 .seg button.on{background:var(--nacht);color:#fff}
-.content{padding:28px max(28px,env(safe-area-inset-right,0px)) 48px max(28px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:24px;max-width:1240px;width:100%}
+.content{padding:28px max(28px,env(safe-area-inset-right,0px)) 48px max(28px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:24px;width:100%}
 .head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .head p{margin:6px 0 0;color:var(--muted);max-width:62ch}
 .btn{text-decoration:none;display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:var(--r-md);font-weight:700;font-size:.9rem;border:2px solid transparent;cursor:pointer;background:none;white-space:nowrap}
@@ -102,13 +103,13 @@ td{padding:12px 20px;border-bottom:1px solid var(--line);vertical-align:middle}
 tr:last-child td{border-bottom:0}
 tbody tr:hover td{background:var(--hover)}
 .num{font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:.82rem;white-space:nowrap}
-.name{display:flex;align-items:center;gap:12px;min-width:240px}
+.name{display:flex;align-items:center;gap:12px;min-width:200px}
 .osicon{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;flex:none;background:var(--nacht);color:var(--koraal);font-weight:800;font-stretch:100%;font-size:.66rem;letter-spacing:.02em}
 .fw{display:flex;gap:4px;flex-wrap:nowrap}
 .method{white-space:nowrap}
 .name b{display:block} .name small{color:var(--muted);font-size:.78rem;font-family:var(--mono)}
 /* library */
-.lib{display:grid;grid-template-columns:240px minmax(0,1fr);gap:24px;align-items:start}
+.lib{display:grid;grid-template-columns:220px minmax(0,1fr);gap:20px;align-items:start}
 .folders{padding:10px}
 .folders a{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;color:var(--muted);text-decoration:none;cursor:pointer;font-weight:500}
 .folders a:hover{background:var(--hover);color:var(--ink)}
@@ -267,7 +268,7 @@ textarea.input{min-height:90px;font-family:var(--mono);font-size:.82rem;resize:v
 .check-row{display:flex;gap:10px;align-items:center;font-size:.9rem}
 .check-row input{accent-color:var(--koraal);width:16px;height:16px}
 .dropdown{position:relative}
-.dropdown-menu{position:absolute;right:0;top:calc(100% + 6px);min-width:220px;background:var(--raised);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow);padding:6px;z-index:30;display:flex;flex-direction:column}
+.dropdown-menu{position:absolute;right:0;top:calc(100% + 6px);min-width:220px;max-width:calc(100vw - 16px);overflow:auto;background:var(--raised);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow);padding:6px;z-index:30;display:flex;flex-direction:column}
 .dropdown-menu button,.dropdown-menu a{display:flex;align-items:center;gap:10px;background:none;border:0;text-align:left;padding:9px 10px;border-radius:7px;cursor:pointer;font-size:.88rem;color:var(--ink);text-decoration:none}
 .dropdown-menu button:hover,.dropdown-menu a:hover{background:var(--hover)}
 .dropdown-menu .danger{color:var(--off)}
@@ -304,3 +305,12 @@ textarea.input{min-height:90px;font-family:var(--mono);font-size:.82rem;resize:v
 .svc li{flex-wrap:wrap}
 .svc li>*{min-width:0;overflow-wrap:anywhere}
 .grid-2>*,.grid-4>*{min-width:0}
+.name small{overflow-wrap:anywhere}
+.name .inline-input{width:100%}
+.dropdown-menu select.input{max-width:calc(100% - 12px)}
+.lib th,.lib td{padding-left:14px;padding-right:14px}
+.lib th:first-child,.lib td:first-child{padding-left:20px}
+.lib td .fw{flex-wrap:wrap}
+@media (max-width:1500px){.lib .name{min-width:170px}.lib .osicon{width:32px;height:32px}}
+@media (max-width:1280px){.lib{grid-template-columns:1fr}}
+@media (max-width:1200px){.grid-2{grid-template-columns:1fr}}
