@@ -269,7 +269,11 @@ def winpe_files(server_ip: str, row, ctx: dict) -> dict[str, str]:
         "  echo Check that TCP port 445 to the server is open.",
         "  cmd /k",
         ")",
+        f"echo Starting Windows Setup from {share}\\{folder} ...",
         f"Z:\\{folder}\\{setup.replace('/', chr(92))}",
+        "if errorlevel 1 (",
+        "  echo Windows Setup could not be started. Update the PXE Boot Server and try again.",
+        ")",
         "cmd /k",
         "",
     ])

@@ -77,3 +77,9 @@ def test_boot_endpoint_reports_missing_files(iso_row):
     r = TestClient(app).get(f"/ipxe/iso/{row['id']}.ipxe", headers={"host": "10.0.0.5"})
     assert r.status_code == 200
     assert "kernel" not in r.text and "boot.wim" not in r.text.split("Files missing")[0]
+
+
+def test_samba_share_allows_running_setup():
+    from pathlib import Path
+    conf = (Path(__file__).resolve().parent.parent / "deploy" / "smb-share.conf").read_text()
+    assert "acl allow execute always = yes" in conf
