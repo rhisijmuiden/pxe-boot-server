@@ -18,7 +18,7 @@ import subprocess
 import threading
 import time
 
-from . import config, db, isos
+from . import config, db, isos, windows
 
 log = logging.getLogger("pxe.answers")
 
@@ -27,6 +27,7 @@ FORMATS = {
     "preseed": "Debian preseed",
     "kickstart": "Kickstart",
     "proxmox": "Proxmox answer.toml",
+    "autounattend": "Windows autounattend.xml",
 }
 
 DEFAULT_DATA = {
@@ -37,6 +38,9 @@ DEFAULT_DATA = {
     "network": "dhcp", "address": "", "gateway": "", "dns": "1.1.1.1",
     "software": "server", "packages": "", "post_command": "",
     "mirror": "deb.debian.org", "mailto": "", "reboot": True,
+    # Windows
+    "win_index": "1", "win_key": "", "win_user": "Admin", "win_password": "",
+    "win_disk": "ask", "win_disk_id": "0", "win_bypass": True,
 }
 
 TIMEZONES = ["Europe/Amsterdam", "Europe/Brussels", "Europe/Berlin", "Europe/London", "Europe/Paris", "UTC",
@@ -93,7 +97,7 @@ def effective_data(row, mac: str = "") -> dict:
     if mac and mac != "-":
         m = db.q1("SELECT name FROM machines WHERE mac=?", mac.replace("-", ":"))
         if m and m["name"]:
-            d["hostname"] = clean_hostname(m["name"])
+            d["hostname"] = m["name"] if row["format"] == "autounattend" else clean_hostname(m["name"])
     return d
 
 
@@ -305,9 +309,19 @@ def render_proxmox(row, b: str, mac: str) -> str:
     return "\n".join(out) + "\n"
 
 
-def render(row, b: str, mac: str = "") -> dict[str, str]:
+def render_autounattend(row, b: str, mac: str, platform: str = "efi") -> str:
+    d = effective_data(row, mac)
+    iso = isos.get(row["iso_id"])
+    eds = isos.iso_info(iso).get("editions", []) if iso else []
+    edition = next((e for e in eds if str(e["index"]) == str(d.get("win_index"))), None)
+    return windows.render(d, edition, platform, _callback(b, row, mac), row["name"])
+
+
+def render(row, b: str, mac: str = "", platform: str = "efi") -> dict[str, str]:
     """All files of a profile, keyed by file name (used by the preview and by the HTTP endpoints)."""
     fmt = row["format"]
+    if fmt == "autounattend":
+        return {"autounattend.xml": render_autounattend(row, b, mac, platform)}
     if fmt == "autoinstall":
         return render_autoinstall(row, b, mac)
     if fmt == "preseed":
@@ -324,7 +338,8 @@ def render(row, b: str, mac: str = "") -> dict[str, str]:
 
 
 def preview_name(fmt: str) -> str:
-    return {"autoinstall": "user-data", "preseed": "preseed.cfg", "kickstart": "ks.cfg", "proxmox": "answer.toml"}[fmt]
+    return {"autoinstall": "user-data", "preseed": "preseed.cfg", "kickstart": "ks.cfg", "proxmox": "answer.toml",
+            "autounattend": "autounattend.xml"}[fmt]
 
 
 # ---------------------------------------------------------------- persistence
@@ -337,7 +352,8 @@ def save(aid: int | None, name: str, iso_id: int, data: dict) -> int:
     if not fmt:
         raise ValueError("format")
     clean = {k: data.get(k, v) for k, v in DEFAULT_DATA.items()}
-    clean["hostname"] = clean_hostname(clean["hostname"])
+    clean["hostname"] = windows.computer_name(clean["hostname"]) if fmt == "autounattend" \
+        else clean_hostname(clean["hostname"])
     now = time.time()
     status = "building" if fmt == "proxmox" else "ready"
     if aid:

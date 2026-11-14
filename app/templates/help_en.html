@@ -77,6 +77,8 @@
   <li>Setup runs from the network share. If setup cannot find a disk, the ISO has no driver for the storage controller (common with Intel VMD/RST). Turn VMD off in the BIOS or add drivers to <code>boot.wim</code>.</li>
   <li>Windows 11 checks TPM 2.0 and Secure Boot capability, not whether Secure Boot is switched on.</li>
   <li>Both Legacy BIOS and UEFI work with the same ISO.</li>
+  <li><strong>Unattended Windows</strong>: create an <a class="link" href="/answers">answer file</a> for the Windows ISO. Pick the edition (read from the ISO), a product key or the generic key, language, time zone, a local administrator, and whether Setup asks for the disk or wipes a disk you choose. Then link the PC in <a class="link" href="/machines">Machines</a> to the ISO and the answer file: the machine name becomes the Windows computer name. Setup skips the questions and the Microsoft account, and the PC reports back when it is done.</li>
+  <li>If no editions are listed, click <strong>Detect again</strong> on the ISO in the ISO library.</li>
 </ul>
 </div></div>
 

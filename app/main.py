@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import answers, auth, config, db, dnsmasq, i18n, ipxe, isos, live, mailer, system, uploads
+from . import answers, auth, config, db, dnsmasq, i18n, ipxe, isos, live, mailer, system, uploads, windows
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("pxe")
@@ -227,7 +227,13 @@ def ipxe_winpe(request: Request, iso_id: int, name: str):
     row = isos.get(iso_id)
     if row is None:
         raise HTTPException(404)
-    files = ipxe.winpe_files(host_ip(request), row, ctx_from(request))
+    ans = None
+    aid = request.query_params.get("answer", "")
+    if aid.isdigit():
+        ans = answers.get(int(aid))
+        if ans is not None and ans["format"] != "autounattend":
+            ans = None
+    files = ipxe.winpe_files(host_ip(request), row, ctx_from(request), ans)
     if name not in files:
         raise HTTPException(404)
     return PlainTextResponse(files[name], headers={"Cache-Control": "no-store"})
@@ -261,7 +267,10 @@ async def answer_file(request: Request, aid: int, mac: str, name: str):
 def install_done(request: Request, aid: int, mac: str):
     ip = client_ip(request)
     row = answers.get(aid)
+    already = (live.CLIENTS.get(ip) or {}).get("phase") == "done"
     c = live.touch(ip, "done")
+    if already:
+        return PlainTextResponse("ok")
     db.log_event("done", mac=mac.replace("-", ":") if mac != "-" else c.get("mac", ""), ip=ip,
                  iso_id=c.get("iso_id"), iso_name=c.get("iso_name") or (row["name"] if row else ""), answer_id=aid)
     mailer.notify("install", f"Installation finished: {c.get('hostname') or ip}",
@@ -638,7 +647,8 @@ def _answer_isos():
     for r in isos.list_isos():
         fmt = answers.format_for_method(isos.method_of(r))
         if fmt and r["status"] == "ready":
-            res.append({"id": r["id"], "name": r["name"], "format": fmt, "label": answers.FORMATS[fmt]})
+            res.append({"id": r["id"], "name": r["name"], "format": fmt, "label": answers.FORMATS[fmt],
+                        "editions": isos.iso_info(r).get("editions", []) if fmt == "autounattend" else []})
     return res
 
 
@@ -650,6 +660,7 @@ def answer_edit(request: Request, aid: int | None = None):
     data = answers.data_of(row) if row else dict(answers.DEFAULT_DATA)
     data.pop("root_password_hash", None)
     data.pop("user_password_hash", None)
+    data.pop("win_password", None)
     iso_list = _answer_isos()
     pre_iso = row["iso_id"] if row else (int(request.query_params.get("iso", 0)) or (iso_list[0]["id"] if iso_list else 0))
     return render(request, "answer_edit.html", {
@@ -657,12 +668,21 @@ def answer_edit(request: Request, aid: int | None = None):
         "TIMEZONES": answers.TIMEZONES, "LOCALES": answers.LOCALES, "KEYBOARDS": answers.KEYBOARDS,
         "has_root_pw": bool(row and answers.data_of(row)["root_password_hash"]),
         "has_user_pw": bool(row and answers.data_of(row)["user_password_hash"]),
+        "has_win_pw": bool(row and answers.data_of(row)["win_password"]),
     })
 
 
 def _answer_data(form: dict, existing: dict | None) -> dict:
     d = {k: form.get(k, v) for k, v in answers.DEFAULT_DATA.items() if not isinstance(v, bool)}
     d["reboot"] = form.get("reboot") in ("1", "on", "true", True)
+    d["win_bypass"] = form.get("win_bypass") in ("1", "on", "true", True)
+    d["win_disk"] = "wipe" if form.get("win_disk") == "wipe" else "ask"
+    d["win_disk_id"] = str(form.get("win_disk_id") or "0") if str(form.get("win_disk_id") or "0").isdigit() else "0"
+    d["win_index"] = str(form.get("win_index") or "1") if str(form.get("win_index") or "1").isdigit() else "1"
+    if form.get("win_pw"):
+        d["win_password"] = windows.encode_password(form["win_pw"])
+    else:
+        d["win_password"] = existing.get("win_password", "") if existing else ""
     for field, pw in (("root_password_hash", "root_password"), ("user_password_hash", "user_password")):
         if form.get(pw):
             d[field] = answers.hash_password(form[pw])
@@ -690,8 +710,10 @@ async def api_answer_preview(request: Request):
     for field, pw in (("root_password_hash", "root_password"), ("user_password_hash", "user_password")):
         if form.get(pw):
             data[field] = "$6$<hash of the password you typed>"
+    if form.get("win_pw"):
+        data["win_password"] = "<encoded password you typed>"
     fake = {"id": int(form.get("id") or 0) or 0, "name": form.get("name") or "profile", "format": fmt,
-            "data": json.dumps(data), "updated": time.time()}
+            "data": json.dumps(data), "updated": time.time(), "iso_id": iso["id"]}
     files = answers.render(fake, ipxe.base(system.server_ip()), "")
     return {"format": fmt, "label": answers.FORMATS.get(fmt, ""), "name": answers.preview_name(fmt),
             "text": files.get(answers.preview_name(fmt), "")}
