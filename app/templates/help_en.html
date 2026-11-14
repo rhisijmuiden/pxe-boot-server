@@ -97,5 +97,6 @@
   <li><strong>"No boot server found"</strong>: the DHCP answer contained neither proxy DHCP nor next-server. With option B, check the Network Boot server address.</li>
   <li><strong>Menu loads but an ISO fails</strong>: open the ISO's menu in the library and choose another boot method, then try again.</li>
   <li><strong>Client shows the menu but you want local disk</strong>: set the default entry to "Boot from local disk" in Boot menu; it is used after the timeout.</li>
+  <li><strong>Proxmox VE VM does not boot over the network with UEFI</strong>: give the VM an EFI disk in the 2MB OVMF format. In our tests the 4MB format did not boot from the network. Legacy BIOS (SeaBIOS) VMs work as they are.</li>
 </ul>
 </div></div>

@@ -44,8 +44,8 @@ say "Installing packages"
 # Placeholder dnsmasq config before the package starts it: no DNS, no DHCP until configured.
 mkdir -p /etc/dnsmasq.d
 [ -f /etc/dnsmasq.d/pxe-boot-server.conf ] || printf '# Placeholder until PXE Boot Server applies its configuration\nport=0\n' > /etc/dnsmasq.d/pxe-boot-server.conf
-apt-get update -q
-apt-get install -y -q --no-install-recommends \
+apt-get -o DPkg::Lock::Timeout=600 update -q
+apt-get -o DPkg::Lock::Timeout=600 install -y -q --no-install-recommends \
   ca-certificates curl git sudo iproute2 openssl \
   python3 python3-venv python3-pip \
   nginx dnsmasq samba samba-common-bin \
@@ -111,7 +111,9 @@ dnsmasq.apply()
 PY
 systemctl restart pxe-boot-server
 
-IP="$(ip -o -4 addr show dev "${IFACE:-lo}" 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -1)"
+# The web interface is reached on the address of the default route, which can differ from the PXE interface.
+IP="$(ip -o -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
+[ -n "$IP" ] || IP="$(ip -o -4 addr show dev "${IFACE:-lo}" 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -1)"
 echo
 echo "${c_grn}PXE Boot Server $(cat "$DEST/VERSION") is installed.${c_off}"
 echo "  Web interface:  http://${IP:-<server-ip>}/"

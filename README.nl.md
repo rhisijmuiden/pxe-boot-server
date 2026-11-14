@@ -45,6 +45,8 @@ Open daarna `http://<server-ip>/` en maak het eerste beheerdersaccount aan.
 
 **Vereisten**: Debian 13, amd64, een vast IP-adres (of een DHCP-reservering) en genoeg schijfruimte onder `/srv/pxe` voor je ISO's. Op de clients moet **Secure Boot uit** staan (iPXE en wimboot zijn niet door Microsoft ondertekend).
 
+**Virtuele machines in Proxmox VE**: in onze tests werkte UEFI-netwerkboot alleen als de EFI-schijf van de VM het **2MB OVMF**-formaat gebruikt. Met het 4MB-formaat startte de VM niet via het netwerk. VM's met Legacy BIOS (SeaBIOS) werken zoals ze zijn.
+
 ### Wat de installer doet
 
 - Installeert `nginx`, `dnsmasq`, `samba`, `xorriso`, `syslinux-common`, Python 3 en git.

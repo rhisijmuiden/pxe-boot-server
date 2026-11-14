@@ -11,6 +11,8 @@ goto no_server
 :found
 echo Boot server: ${pxe}
 chain --autofree http://${pxe}/ipxe/boot.ipxe || goto chain_failed
+# Back here when the menu chose Boot from local disk: let the firmware boot the next device.
+exit 0
 :dhcp_failed
 echo No DHCP answer, retrying in 3 seconds ...
 sleep 3

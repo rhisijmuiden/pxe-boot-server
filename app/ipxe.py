@@ -26,6 +26,8 @@ def entry_script(server_ip: str) -> str:
     return f"""#!ipxe
 # PXE Boot Server entry point
 chain --autofree {b}/ipxe/menu.ipxe?{CLIENT_VARS} || goto failed
+# Back here when the menu chose Boot from local disk: hand control back to the firmware.
+exit 0
 :failed
 echo Could not load the boot menu from {b}
 prompt --timeout 10000 Press any key to retry ... ||
