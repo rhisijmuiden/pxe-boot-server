@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% from "_head.html" import head %}
+{% block content %}
+{{ head(t('network'), t('net_sub')) }}
+{% if welcome %}<div class="callout ok"><svg><use href="#i-check"/></svg><span>{{ t('welcome_network') }}</span></div>{% endif %}
+<form class="panel" method="post" action="/network" id="netForm">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="panel-b" style="display:flex;flex-direction:column;gap:22px">
+    <div class="field"><label>{{ t('iface') }}</label>
+      <div class="radios">{% for i in itfs %}
+        <label class="radio {{ 'on' if i.name in selected }}" data-check><input type="checkbox" name="interfaces" value="{{ i.name }}" {{ 'checked' if i.name in selected }} hidden><span class="rb" style="border-radius:5px"></span>
+          <span><b>{{ i.name }}</b> {% if i.vlan %}<span class="chip yes">VLAN</span>{% endif %}{% if not i.up %} <span class="chip">down</span>{% endif %}
+          <p class="num">{{ i.addrs|join(', ') or t('no_ipv4') }}</p></span></label>
+      {% endfor %}</div>
+      <span class="hint">{{ t('iface_hint') }}</span></div>
+    <div class="form">
+      <div class="field"><label for="server_ip">{{ t('serverip') }}</label><input class="input num" id="server_ip" name="server_ip" value="{{ s.server_ip }}" placeholder="{{ auto_ip }}"><span class="hint">{{ t('serverip_hint') }}</span></div>
+      <div class="field"><label for="uefi_loader">{{ t('uefi_bin') }}</label><select class="input" id="uefi_loader" name="uefi_loader">
+        <option value="ipxe.efi" {{ 'selected' if s.uefi_loader == 'ipxe.efi' }}>ipxe.efi · {{ t('uefi_ipxe') }}</option>
+        <option value="snponly.efi" {{ 'selected' if s.uefi_loader == 'snponly.efi' }}>snponly.efi · {{ t('uefi_snp') }}</option></select></div>
+    </div>
+    <div class="field"><label>{{ t('mode') }}</label><div class="radios">
+      <label class="radio {{ 'on' if s.dhcp_mode != 'full' }}"><input type="radio" name="dhcp_mode" value="proxy" {{ 'checked' if s.dhcp_mode != 'full' }} hidden><span class="rb"></span><span><b>{{ t('m_proxy') }}</b><p>{{ t('m_proxy_d') }}</p></span></label>
+      <label class="radio {{ 'on' if s.dhcp_mode == 'full' }}"><input type="radio" name="dhcp_mode" value="full" {{ 'checked' if s.dhcp_mode == 'full' }} hidden><span class="rb"></span><span><b>{{ t('m_full') }}</b><p>{{ t('m_full_d') }}</p></span></label>
+    </div></div>
+    <div class="form" id="fullDhcp" {% if s.dhcp_mode != 'full' %}hidden{% endif %}>
+      <div class="field"><label for="r1">{{ t('range_start') }}</label><input class="input num" id="r1" name="dhcp_range_start" value="{{ s.dhcp_range_start }}" placeholder="10.0.50.100"></div>
+      <div class="field"><label for="r2">{{ t('range_end') }}</label><input class="input num" id="r2" name="dhcp_range_end" value="{{ s.dhcp_range_end }}" placeholder="10.0.50.200"></div>
+      <div class="field"><label for="gw">Gateway</label><input class="input num" id="gw" name="dhcp_gateway" value="{{ s.dhcp_gateway }}"></div>
+      <div class="field"><label for="dns">DNS</label><input class="input num" id="dns" name="dhcp_dns" value="{{ s.dhcp_dns }}" placeholder="1.1.1.1, 9.9.9.9"></div>
+      <div class="field"><label for="lease">{{ t('lease') }}</label><input class="input num" id="lease" name="dhcp_lease" value="{{ s.dhcp_lease or '12h' }}"></div>
+    </div>
+    <div class="callout"><svg><use href="#i-info"/></svg><span>{{ t('secureboot') }}</span></div>
+    <div class="actions"><button class="btn btn-accent" type="submit">{{ t('apply') }}</button></div>
+  </div>
+</form>
+
+<div class="grid-2">
+  <form class="panel" method="post" action="/network/vlan">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="panel-h"><h2>{{ t('vlan_add') }}</h2><a class="link small" href="/help#vlans">{{ t('vlan_howto') }}</a></div>
+    <div class="panel-b" style="display:flex;flex-direction:column;gap:16px">
+      <p class="note small" style="margin:0">{{ t('vlan_add_sub') }}</p>
+      <div class="form">
+        <div class="field"><label for="v_parent">{{ t('vlan_parent') }}</label><select class="input" id="v_parent" name="parent">
+          {% for i in itfs if not i.vlan %}<option>{{ i.name }}</option>{% endfor %}</select></div>
+        <div class="field"><label for="v_id">VLAN ID</label><input class="input num" id="v_id" name="vlan_id" type="number" min="1" max="4094" required></div>
+        <div class="field full"><label for="v_addr">{{ t('vlan_addr') }}</label><input class="input num" id="v_addr" name="address" placeholder="10.0.50.5/24"><span class="hint">{{ t('vlan_addr_hint') }}</span></div>
+      </div>
+      <div class="actions"><button class="btn btn-dark" type="submit">{{ t('vlan_add_btn') }}</button></div>
+    </div>
+  </form>
+  <div class="panel"><div class="panel-h"><h2>{{ t('vlan_list') }}</h2></div>
+    {% set vl = itfs|selectattr('vlan')|list %}
+    {% if vl %}<ul class="svc">{% for i in vl %}<li><b>{{ i.name }}</b><span class="note num">{{ i.addrs|join(', ') or t('no_ipv4') }}</span>
+      <form method="post" action="/network/vlan/delete" style="margin-left:auto" data-confirm="{{ t('confirm_vlan_del', name=i.name) }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="name" value="{{ i.name }}">
+        <button class="icon-btn" type="submit" aria-label="{{ t('delete') }}"><svg><use href="#i-trash"/></svg></button></form></li>{% endfor %}</ul>
+    {% else %}<div class="empty"><span class="small">{{ t('no_vlans') }}</span></div>{% endif %}
+  </div>
+</div>
+
+<details class="panel"><summary class="panel-h" style="cursor:pointer"><h2>{{ t('dnsmasq_conf') }}</h2></summary><div class="panel-b"><pre class="code">{{ conf }}</pre></div></details>
+{% endblock %}
+{% block scripts %}<script>PXEPage.network();</script>{% endblock %}

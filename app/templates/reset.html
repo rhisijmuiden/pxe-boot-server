@@ -1,0 +1,11 @@
+{% extends "auth_base.html" %}
+{% block title %}{{ t('reset_password') }}{% endblock %}
+{% block content %}
+<div><h1>{{ t('reset_password') }}</h1><p>{{ t('reset_sub') }}</p></div>
+<form method="post" action="/reset/{{ token }}" style="display:flex;flex-direction:column;gap:14px">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="field"><label for="password">{{ t('new_password') }}</label><input class="input" id="password" name="password" type="password" minlength="8" required autocomplete="new-password"></div>
+  <div class="field"><label for="password2">{{ t('password_repeat') }}</label><input class="input" id="password2" name="password2" type="password" minlength="8" required autocomplete="new-password"></div>
+  <button class="btn btn-accent btn-block" type="submit">{{ t('reset_password') }}</button>
+</form>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% from "_head.html" import head %}
+{% block content %}
+{{ head(t('bootlog'), t('log_sub')) }}
+<div class="panel">{% if rows %}<div class="tbl-wrap"><table>
+  <thead><tr><th>{{ t('col_time') }}</th><th>{{ t('col_event') }}</th><th>{{ t('col_mac') }}</th><th>{{ t('col_ip') }}</th><th>{{ t('col_fw2') }}</th><th>{{ t('col_choice') }}</th><th></th></tr></thead><tbody>
+  {% for b in rows %}<tr><td class="num">{{ b.ts|time }}</td><td><span class="chip {{ 'yes' if b.event in ('boot','auto') else '' }}">{{ t('ev_' + b.event) }}</span></td>
+    <td class="num">{{ b.mac or '–' }}</td><td class="num">{{ b.ip }}</td><td>{{ b.platform or '–' }}</td><td>{{ b.iso_name or '–' }}</td>
+    <td>{% if b.mac and b.mac not in known %}<a class="link small" href="/machines?mac={{ b.mac }}">{{ t('link_machine') }}</a>{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>
+  <div class="panel-b actions">{% if page > 1 %}<a class="btn btn-outline btn-sm" href="?page={{ page - 1 }}">{{ t('newer') }}</a>{% endif %}
+    {% if rows|length == 100 %}<a class="btn btn-outline btn-sm" href="?page={{ page + 1 }}">{{ t('older') }}</a>{% endif %}</div>
+  {% else %}<div class="empty"><svg><use href="#i-log"/></svg><b>{{ t('no_boots') }}</b></div>{% endif %}
+</div>
+{% endblock %}

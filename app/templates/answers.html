@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% from "_head.html" import head %}
+{% block content %}
+{% set act %}<a class="btn btn-accent" href="/answers/new"><svg><use href="#i-plus"/></svg>{{ t('newans') }}</a>{% endset %}
+{{ head(t('answers'), t('ans_sub'), act) }}
+<div class="panel">{% if rows %}<div class="tbl-wrap"><table>
+  <thead><tr><th>{{ t('w_name') }}</th><th>{{ t('col_iso') }}</th><th>{{ t('col_type') }}</th><th>{{ t('col_entry') }}</th><th></th></tr></thead><tbody>
+  {% for a in rows %}<tr data-id="{{ a.id }}">
+    <td><b>{{ a.name }}</b>{% if a.status != 'ready' %}<br><span class="{{ 'status-busy' if a.status == 'building' else 'status-err' }}">{{ t('ans_building') if a.status == 'building' else a.status }}</span>{% endif %}</td>
+    <td>{{ a.iso_name }}</td><td><span class="chip yes">{{ FORMATS[a.format] }}</span></td>
+    <td class="note">{{ a.iso_name }} - {{ a.name }} (unattended)</td>
+    <td><div class="dropdown"><button class="icon-btn" data-dd aria-label="{{ t('actions') }}"><svg><use href="#i-dots"/></svg></button>
+      <div class="dropdown-menu" hidden>
+        <a href="/answers/{{ a.id }}/edit"><svg width="16" height="16"><use href="#i-edit"/></svg>{{ t('edit') }}</a>
+        <a href="/answers/{{ a.id }}/download"><svg width="16" height="16"><use href="#i-download"/></svg>{{ t('download') }}</a>
+        <a href="/machines?new=1&iso={{ a.iso_id }}&answer={{ a.id }}"><svg width="16" height="16"><use href="#i-pin"/></svg>{{ t('addm') }}</a>
+        <hr><button type="button" class="danger" data-del-answer="{{ a.id }}" data-name="{{ a.name }}"><svg width="16" height="16"><use href="#i-trash"/></svg>{{ t('delete') }}</button>
+      </div></div></td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<div class="empty"><svg><use href="#i-wand"/></svg><b>{{ t('no_answers') }}</b><span class="small">{{ t('no_answers_sub') }}</span></div>{% endif %}
+</div>
+<div class="callout"><svg><use href="#i-info"/></svg><span>{{ t('ans_note') }}</span></div>
+{% endblock %}
+{% block scripts %}<script>PXEPage.answers();</script>{% endblock %}

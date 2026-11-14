@@ -1,0 +1,21 @@
+[Unit]
+Description=PXE Boot Server web interface
+After=network-online.target nginx.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pxeboot
+Group=pxeboot
+WorkingDirectory=/opt/pxe-boot-server
+Environment=PYTHONDONTWRITEBYTECODE=1
+EnvironmentFile=-/etc/pxe-boot-server/env
+ExecStart=/opt/pxe-boot-server/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8080 --workers 1 --no-server-header --timeout-keep-alive 30
+Restart=on-failure
+RestartSec=3
+# The app calls bin/pxe-helper through sudo, so NoNewPrivileges must stay off.
+PrivateTmp=true
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

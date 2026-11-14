@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{% block title %}{{ t(nav) }}{% endblock %} · {{ server_name }}</title>
+<link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/static/img/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png">
+<link rel="stylesheet" href="/static/css/app.css?v={{ version }}">
+<script>
+  try { const th = localStorage.getItem("theme"); if (th) document.documentElement.dataset.theme = th; } catch (e) {}
+</script>
+</head>
+<body>
+{% include "_icons.html" %}
+{% set logo %}{% include "_logo.html" %}{% endset %}
+<div class="app" id="app">
+  <aside class="side" id="side">
+    <div class="brand"><a href="/" aria-label="Dashboard">{{ logo }}</a><small>{{ t('product') }}</small></div>
+    <nav class="nav">
+      {% set navitems = [
+        ('g_boot', None, None, False),
+        ('dashboard', '/', 'dash', False),
+        ('live', '/live', 'pulse', False),
+        ('stats', '/stats', 'chart', False),
+        ('library', '/library', 'disc', False),
+        ('bootmenu', '/menu', 'menu', False),
+        ('answers', '/answers', 'wand', False),
+        ('machines', '/machines', 'pin', False),
+        ('bootlog', '/bootlog', 'log', False),
+        ('g_sys', None, None, False),
+        ('network', '/network', 'net', True),
+        ('users', '/users', 'users', True),
+        ('mail', '/mail', 'mail', True),
+        ('settings', '/settings', 'cog', False),
+        ('help', '/help', 'help', False),
+      ] %}
+      {% for key, href, icon, admin in navitems %}
+        {% if href is none %}<div class="group">{{ t(key) }}</div>
+        {% elif not admin or user.role == 'admin' %}
+        <a href="{{ href }}" class="{{ 'on' if nav == key else '' }}"{% if nav == key %} aria-current="page"{% endif %}>
+          <svg><use href="#i-{{ icon }}"/></svg><span>{{ t(key) }}</span>
+          {% if key == 'live' %}<span class="count" id="liveCount" hidden>0</span>{% endif %}
+        </a>
+        {% endif %}
+      {% endfor %}
+    </nav>
+    <div class="side-foot">
+      <button class="info-btn" id="infoBtn" type="button">
+        <svg width="18" height="18"><use href="#i-info"/></svg>
+        <span><b>{{ t('info') }}</b><small>v{{ version }} · {{ channel }}</small></span>
+        <span class="pill warn dot" id="updDot" {% if not update_badge %}hidden{% endif %}>1</span>
+      </button>
+      <div class="user-row">
+        <div class="avatar">{{ (user.name or user.username)[:2]|upper }}</div>
+        <div><b>{{ user.name or user.username }}</b><br><small>{{ t('role_' + user.role) }}</small></div>
+        <form method="post" action="/logout" style="margin-left:auto">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="icon-btn" type="submit" title="{{ t('logout') }}" aria-label="{{ t('logout') }}"><svg><use href="#i-out"/></svg></button>
+        </form>
+      </div>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="top">
+      <button class="icon-btn menu-btn" id="menuBtn" type="button" aria-label="Menu"><svg><use href="#i-burger"/></svg></button>
+      <span class="crumbs">{{ server_name }} / {{ t(nav) }}</span>
+      <span class="spacer"></span>
+      <form method="post" action="/lang" class="lang-form">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="back" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
+        <div class="seg" role="group" aria-label="Language">
+          {% for code in LANGS %}<button type="submit" name="lang" value="{{ code }}" class="{{ 'on' if lang == code else '' }}">{{ code|upper }}</button>{% endfor %}
+        </div>
+      </form>
+      <button class="icon-btn" id="themeBtn" type="button" title="{{ t('theme') }}" aria-label="{{ t('theme') }}"><svg><use href="#i-moon"/></svg></button>
+    </header>
+    <main class="content">
+      {% if flashes %}<div class="flashes">{% for f in flashes %}
+        <div class="flash {{ f.kind }}" role="status"><svg><use href="#i-{{ 'check' if f.kind == 'ok' else 'alert' }}"/></svg><span>{{ t(f.key, **f.kw) }}{% if f.kw.detail %}: {{ f.kw.detail }}{% endif %}</span></div>
+      {% endfor %}</div>{% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+<div id="modalRoot"></div>
+<div id="toastRoot"></div>
+<script>
+  window.PXE = {csrf: {{ csrf|tojson }}, lang: {{ lang|tojson }}, admin: {{ (user.role == 'admin')|tojson }},
+                channel: {{ channel|tojson }}, i18n: {{ js_i18n|safe }}};
+</script>
+<script src="/static/js/app.js?v={{ version }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

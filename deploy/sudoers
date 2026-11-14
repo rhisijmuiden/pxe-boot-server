@@ -1,0 +1,3 @@
+# PXE Boot Server: the web app may run its root helper, nothing else.
+Defaults:pxeboot !requiretty
+pxeboot ALL=(root) NOPASSWD: /opt/pxe-boot-server/bin/pxe-helper

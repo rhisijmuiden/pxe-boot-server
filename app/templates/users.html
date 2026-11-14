@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% from "_head.html" import head %}
+{% block content %}
+{% set act %}{% if not open_form %}<a class="btn btn-accent" href="/users?new=1"><svg><use href="#i-plus"/></svg>{{ t('adduser') }}</a>{% endif %}{% endset %}
+{{ head(t('users'), t('users_sub'), act) }}
+{% if open_form %}{% set e = edit %}
+<form class="panel" method="post" action="/users/save">
+  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="id" value="{{ e.id if e else '' }}">
+  <div class="panel-h"><h2>{{ t('edit') if e else t('adduser') }}</h2></div>
+  <div class="panel-b" style="display:flex;flex-direction:column;gap:18px"><div class="form">
+    <div class="field"><label for="u_username">{{ t('username') }}</label><input class="input" id="u_username" name="username" value="{{ e.username if e else '' }}" {{ 'readonly' if e else 'required' }}></div>
+    <div class="field"><label for="u_name">{{ t('your_name') }}</label><input class="input" id="u_name" name="name" value="{{ e.name if e else '' }}"></div>
+    <div class="field"><label for="u_email">{{ t('email') }}</label><input class="input" id="u_email" name="email" type="email" value="{{ e.email if e else '' }}"></div>
+    <div class="field"><label for="u_role">{{ t('col_role') }}</label><select class="input" id="u_role" name="role">
+      {% for r in ['admin', 'operator'] %}<option value="{{ r }}" {{ 'selected' if e and e.role == r }}>{{ t('role_' + r) }}</option>{% endfor %}</select><span class="hint">{{ t('role_hint') }}</span></div>
+    <div class="field"><label for="u_pw">{{ t('password') }}</label><input class="input" id="u_pw" name="password" type="password" minlength="8" autocomplete="new-password" {{ '' if e else 'required' }} placeholder="{{ t('pw_unchanged') if e else '' }}"></div>
+  </div><div class="actions"><a class="btn btn-outline" href="/users">{{ t('cancel') }}</a><button class="btn btn-accent" type="submit">{{ t('save') }}</button></div></div>
+</form>
+{% endif %}
+<div class="panel"><div class="tbl-wrap"><table>
+  <thead><tr><th>{{ t('col_name') }}</th><th>{{ t('email') }}</th><th>{{ t('col_role') }}</th><th>{{ t('col_last') }}</th><th></th></tr></thead><tbody>
+  {% for u in rows %}<tr><td><div class="name" style="min-width:0"><span class="avatar">{{ (u.name or u.username)[:2]|upper }}</span><span><b>{{ u.name or u.username }}</b><small>{{ u.username }}</small></span></div></td>
+    <td>{{ u.email or '–' }}</td><td><span class="chip {{ 'yes' if u.role == 'admin' }}">{{ t('role_' + u.role) }}</span></td><td class="num">{{ u.last_login|time }}</td>
+    <td><div class="dropdown"><button class="icon-btn" data-dd aria-label="{{ t('actions') }}"><svg><use href="#i-dots"/></svg></button><div class="dropdown-menu" hidden>
+      <a href="/users?edit={{ u.id }}"><svg width="16" height="16"><use href="#i-edit"/></svg>{{ t('edit') }}</a>
+      {% if u.id != user.id %}<hr><button type="button" class="danger" data-del-user="{{ u.id }}" data-name="{{ u.username }}"><svg width="16" height="16"><use href="#i-trash"/></svg>{{ t('delete') }}</button>{% endif %}
+    </div></div></td></tr>{% endfor %}
+</tbody></table></div></div>
+{% endblock %}
+{% block scripts %}<script>PXEPage.users();</script>{% endblock %}

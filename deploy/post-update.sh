@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# Brings the system in line with the code in this repository.
+# Runs as root from install.sh and after every update from the web interface.
+# Safe to run more than once.
+set -euo pipefail
+export LC_ALL=C
+umask 022
+REPO="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+SRV=/srv/pxe
+APP_USER=pxeboot
+step() { echo "-- $*"; }
+
+[ "$(id -u)" = 0 ] || { echo "run as root" >&2; exit 1; }
+
+step "directories"
+install -d -m 755 -o root -g root /etc/pxe-boot-server "$SRV" "$SRV/mnt" "$SRV/tftp"
+install -d -m 755 -o "$APP_USER" -g "$APP_USER" "$SRV/isos" "$SRV/boot" "$SRV/cache" "$SRV/derived"
+install -d -m 750 -o "$APP_USER" -g "$APP_USER" "$SRV/uploads" /var/lib/pxe-boot-server
+install -d -m 755 -o "$APP_USER" -g "$APP_USER" /var/log/pxe-boot-server
+chown -R root:root "$REPO"
+chmod 755 "$REPO/bin/pxe-helper" "$REPO/deploy/post-update.sh" "$REPO/install.sh" 2>/dev/null || true
+git config --system --get-all safe.directory 2>/dev/null | grep -qx "$REPO" || git config --system --add safe.directory "$REPO"
+
+step "python environment"
+[ -x "$REPO/venv/bin/python" ] || python3 -m venv "$REPO/venv"
+"$REPO/venv/bin/pip" install -q --disable-pip-version-check --upgrade pip
+"$REPO/venv/bin/pip" install -q --disable-pip-version-check -r "$REPO/requirements.txt"
+"$REPO/venv/bin/python" -m compileall -q "$REPO/app" >/dev/null || true
+
+step "boot loaders (TFTP)"
+for f in undionly.kpxe ipxe.efi snponly.efi; do
+  install -m 644 "$REPO/ipxe/bin/$f" "$SRV/tftp/$f"
+  # dnsmasq adds ".0" to the boot file name for PXE menu entries on some firmware.
+  install -m 644 "$REPO/ipxe/bin/$f" "$SRV/tftp/$f.0"
+done
+
+step "wimboot and memdisk"
+if [ ! -s "$SRV/boot/wimboot" ] || [ "${PXE_REFRESH_WIMBOOT:-0}" = 1 ]; then
+  if curl -fsSL --retry 3 -o "$SRV/boot/wimboot.tmp" https://github.com/ipxe/wimboot/releases/latest/download/wimboot; then
+    chmod 644 "$SRV/boot/wimboot.tmp"; mv "$SRV/boot/wimboot.tmp" "$SRV/boot/wimboot"
+  else
+    rm -f "$SRV/boot/wimboot.tmp"; echo "warning: could not download wimboot; Windows boot will not work until the next update" >&2
+  fi
+fi
+[ -f /usr/lib/syslinux/memdisk ] && install -m 644 /usr/lib/syslinux/memdisk "$SRV/boot/memdisk"
+chown -R "$APP_USER:$APP_USER" "$SRV/boot"
+
+step "nginx"
+install -m 644 "$REPO/deploy/nginx-pxe-boot-server.conf" /etc/nginx/sites-available/pxe-boot-server
+# Servers with IPv6 switched off cannot listen on [::].
+[ -e /proc/net/if_inet6 ] || sed -i '/listen \[::\]/d' /etc/nginx/sites-available/pxe-boot-server
+ln -sfn /etc/nginx/sites-available/pxe-boot-server /etc/nginx/sites-enabled/pxe-boot-server
+rm -f /etc/nginx/sites-enabled/default
+nginx -t -q
+systemctl enable -q nginx
+systemctl reload nginx 2>/dev/null || systemctl restart nginx
+
+step "sudo rule"
+visudo -cqf "$REPO/deploy/sudoers"
+install -m 440 "$REPO/deploy/sudoers" /etc/sudoers.d/pxe-boot-server
+
+step "samba share"
+if [ -f /etc/samba/smb.conf ]; then
+  sed -i '/^# >>> pxe-boot-server/,/^# <<< pxe-boot-server/d' /etc/samba/smb.conf
+  cat "$REPO/deploy/smb-share.conf" >> /etc/samba/smb.conf
+  testparm -s /etc/samba/smb.conf >/dev/null 2>&1 || { echo "smb.conf check failed" >&2; exit 1; }
+  systemctl enable -q smbd
+  systemctl reload smbd 2>/dev/null || systemctl restart smbd
+fi
+
+step "systemd units"
+install -m 644 "$REPO/deploy/pxe-boot-server.service" /etc/systemd/system/pxe-boot-server.service
+install -m 644 "$REPO/deploy/pxe-boot-vlans.service" /etc/systemd/system/pxe-boot-vlans.service
+install -d /etc/systemd/system/dnsmasq.service.d
+install -m 644 "$REPO/deploy/dnsmasq-override.conf" /etc/systemd/system/dnsmasq.service.d/pxe-boot-server.conf
+systemctl daemon-reload
+systemctl enable -q pxe-boot-server pxe-boot-vlans dnsmasq
+
+echo "-- post-update done ($(cat "$REPO/VERSION"))"

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% from "_head.html" import head %}
+{% block content %}
+{% set act %}{% if not open_form %}<a class="btn btn-accent" href="/machines?new=1"><svg><use href="#i-plus"/></svg>{{ t('addm') }}</a>{% endif %}{% endset %}
+{{ head(t('machines'), t('m_sub'), act) }}
+{% if open_form %}{% set e = edit %}
+<form class="panel" method="post" action="/machines/save" id="machineForm">
+  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="id" value="{{ e.id if e else '' }}">
+  <div class="panel-h"><h2>{{ t('m_form') }}</h2></div>
+  <div class="panel-b" style="display:flex;flex-direction:column;gap:18px">
+    <div class="form">
+      <div class="field"><label for="mf_mac">{{ t('col_mac2') }}</label><input class="input num" id="mf_mac" name="mac" required value="{{ e.mac if e else prefill_mac }}" placeholder="aa:bb:cc:dd:ee:ff" pattern="([0-9A-Fa-f]{2}[:\-]){5}[0-9A-Fa-f]{2}"></div>
+      <div class="field"><label for="mf_pick">{{ t('m_pick') }}</label><select class="input" id="mf_pick"><option value="">–</option>
+        {% for b in recent %}<option value="{{ b.mac }}">{{ b.mac }} · {{ b.ip }} · {{ b.platform }} · {{ b.ts|time }}</option>{% endfor %}</select></div>
+      <div class="field"><label for="mf_name">{{ t('m_name') }}</label><input class="input" id="mf_name" name="name" value="{{ e.name if e else '' }}" placeholder="WEB02" maxlength="64"><span class="hint">{{ t('m_name_hint') }}</span></div>
+      <div class="field"><label for="mf_iso">{{ t('m_iso') }}</label><select class="input" id="mf_iso" name="iso_id" required>
+        {% set want_iso = (e.iso_id if e else (request.query_params.get('iso')|int)) %}
+        {% for i in isos %}<option value="{{ i.id }}" {{ 'selected' if i.id == want_iso }}>{{ i.name }}</option>{% endfor %}</select></div>
+      <div class="field full"><label for="mf_ans">{{ t('m_ans') }}</label><select class="input" id="mf_ans" name="answer_id">
+        <option value="">{{ t('m_none') }}</option>
+        {% set want_ans = (e.answer_id if e else (request.query_params.get('answer')|int)) %}
+        {% for a in answers %}<option value="{{ a.id }}" data-iso="{{ a.iso_id }}" {{ 'selected' if a.id == want_ans }}>{{ a.name }} ({{ a.iso_name }})</option>{% endfor %}</select></div>
+    </div>
+    <div class="field"><label>{{ t('m_mode') }}</label><div class="radios" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+      {% set mode = e.mode if e else 'once' %}
+      {% for m in ['once', 'always', 'default'] %}<label class="radio {{ 'on' if mode == m }}"><input type="radio" name="mode" value="{{ m }}" {{ 'checked' if mode == m }} hidden><span class="rb"></span>
+        <span><b>{{ t('mo_' + m) }}</b><p>{{ t('mo_' + m + '_d') }}</p></span></label>{% endfor %}
+    </div></div>
+    <div class="actions"><a class="btn btn-outline" href="/machines">{{ t('cancel') }}</a><button class="btn btn-accent" type="submit">{{ t('save') }}</button></div>
+  </div>
+</form>
+{% endif %}
+<div class="panel">{% if rows %}<div class="tbl-wrap"><table>
+  <thead><tr><th>{{ t('m_name') }}</th><th>{{ t('col_mac2') }}</th><th>{{ t('col_target') }}</th><th>{{ t('col_mode') }}</th><th>{{ t('col_seen') }}</th><th></th></tr></thead><tbody>
+  {% for m in rows %}<tr>
+    <td><b>{{ m.name or '–' }}</b></td><td class="num">{{ m.mac }}</td>
+    <td>{{ m.iso_name or '–' }}{% if m.answer_name %}<br><small class="note">+ {{ m.answer_name }}</small>{% endif %}</td>
+    <td>{% if m.mode == 'once' and m.used %}<span class="pill ok">{{ t('used') }}</span>{% else %}<span class="chip {{ '' if m.mode == 'default' else 'yes' }}">{{ t('mo_' + m.mode) }}</span>{% endif %}</td>
+    <td class="num">{{ m.last_seen|time }}</td>
+    <td><div class="dropdown"><button class="icon-btn" data-dd aria-label="{{ t('actions') }}"><svg><use href="#i-dots"/></svg></button>
+      <div class="dropdown-menu" hidden>
+        <a href="/machines?edit={{ m.id }}"><svg width="16" height="16"><use href="#i-edit"/></svg>{{ t('edit') }}</a>
+        {% if m.mode == 'once' and m.used %}<button type="button" data-rearm="{{ m.id }}"><svg width="16" height="16"><use href="#i-refresh"/></svg>{{ t('rearm') }}</button>{% endif %}
+        <hr><button type="button" class="danger" data-del-machine="{{ m.id }}" data-name="{{ m.name or m.mac }}"><svg width="16" height="16"><use href="#i-trash"/></svg>{{ t('delete') }}</button>
+      </div></div></td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<div class="empty"><svg><use href="#i-pin"/></svg><b>{{ t('no_machines') }}</b><span class="small">{{ t('no_machines_sub') }}</span></div>{% endif %}
+</div>
+{% endblock %}
+{% block scripts %}<script>PXEPage.machines();</script>{% endblock %}

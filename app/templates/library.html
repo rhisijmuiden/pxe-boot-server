@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% from "_head.html" import head %}
+{% block content %}
+{% set act %}<button class="btn btn-outline" id="rescan" type="button"><svg><use href="#i-refresh"/></svg>{{ t('rescan') }}</button>
+<button class="btn btn-outline" id="newFolderBtn" type="button"><svg><use href="#i-folder"/></svg>{{ t('newfolder') }}</button>{% endset %}
+{{ head(t('library'), t('lib_sub'), act) }}
+<div class="lib">
+  <div class="panel folders">
+    <a href="/library" class="{{ 'on' if not folder }}"><svg><use href="#i-disc"/></svg>{{ t('allisos') }}<span>{{ total }}</span></a><hr>
+    {% for f in folders %}{% set depth = f.count('/') %}
+      <a href="/library?folder={{ f|urlencode }}" class="{{ 'on' if folder == f }}" style="padding-left:{{ 10 + depth * 16 }}px">
+        <svg><use href="#i-folder"/></svg>{{ f.rsplit('/', 1)[-1] }}<span>{{ counts.get(f, 0) }}</span></a>
+    {% else %}<p class="note small" style="padding:4px 10px">{{ t('no_folders') }}</p>{% endfor %}
+    <form id="newFolder" hidden style="padding:8px 4px;display:flex;flex-direction:column;gap:8px">
+      <input class="input" id="newFolderName" placeholder="{{ t('folder_name') }}" value="{{ folder ~ '/' if folder }}">
+      <div class="actions"><button class="btn btn-dark btn-sm" type="submit">{{ t('create') }}</button></div>
+    </form>
+    {% if folder and not counts.get(folder) %}<button class="btn btn-danger btn-sm" id="delFolder" data-folder="{{ folder }}" type="button" style="margin:8px 4px">{{ t('delete_folder') }}</button>{% endif %}
+  </div>
+  <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+    <label class="drop" id="drop" for="file">
+      <span class="big"><svg><use href="#i-upload"/></svg></span>
+      <span class="grow"><b>{{ t('drop_t') }}</b><p>{{ t('drop_d') }}{% if folder %} {{ t('drop_into') }} <b>{{ folder }}</b>.{% endif %}</p></span>
+      <span class="btn btn-accent"><svg><use href="#i-plus"/></svg>{{ t('upload') }}</span>
+      <input type="file" id="file" accept=".iso,application/x-iso9660-image" multiple hidden>
+    </label>
+    <div class="uploads" id="uploads" data-folder="{{ folder }}" data-chunk="{{ chunk }}"
+         data-pending='{{ pending|tojson }}'></div>
+    <div class="panel">
+      {% if items %}<div class="tbl-wrap"><table>
+        <thead><tr><th>{{ t('col_name') }}</th><th>{{ t('col_method') }}</th><th>{{ t('col_fw') }}</th><th>{{ t('col_size') }}</th><th>{{ t('col_menu') }}</th><th></th></tr></thead>
+        <tbody>
+        {% for it in items %}{% set r = it.row %}{% set m = METHODS[it.method] %}
+          <tr data-id="{{ r.id }}">
+            <td><div class="name"><span class="osicon">{{ it.tag }}</span><span style="min-width:0;flex:1">
+              <input class="inline-input" value="{{ r.name }}" data-rename="{{ r.id }}" aria-label="{{ t('col_name') }}">
+              <small>{{ r.relpath }}</small>
+              {% if r.status == 'error' %}<br><span class="status-err">{{ t('iso_error') }}: {{ r.error }}</span>
+              {% elif r.status != 'ready' %}<br><span class="status-busy">{{ t('iso_busy') }}</span>{% endif %}
+            </span></div></td>
+            <td><span class="method"><i></i>{{ m.label }}</span><br><small class="note">{{ t('method_manual') if r.method_override else t('detected') }}{% if it.answers %} · {{ it.answers }} {{ t('ans_short') }}{% endif %}</small></td>
+            <td><span class="fw"><span class="chip {{ 'yes' if 'bios' in m.fw else 'no' }}">BIOS</span><span class="chip {{ 'yes' if 'efi' in m.fw else 'no' }}">UEFI</span></span></td>
+            <td class="num">{{ r.size|bytes }}</td>
+            <td><button class="toggle {{ 'on' if r.enabled }}" data-toggle="{{ r.id }}" aria-pressed="{{ 'true' if r.enabled else 'false' }}" aria-label="{{ t('col_menu') }}"></button></td>
+            <td><div class="dropdown"><button class="icon-btn" data-dd aria-label="{{ t('actions') }}"><svg><use href="#i-dots"/></svg></button>
+              <div class="dropdown-menu" hidden>
+                <label class="small note" style="padding:6px 10px 2px">{{ t('col_method') }}</label>
+                <select class="input" style="margin:0 6px 6px;width:auto" data-method="{{ r.id }}">
+                  <option value="">{{ t('auto_detect') }} ({{ METHODS[r.method].label }})</option>
+                  {% for k, v in METHODS.items() %}<option value="{{ k }}" {{ 'selected' if r.method_override == k }}>{{ v.label }}</option>{% endfor %}
+                </select>
+                <label class="small note" style="padding:6px 10px 2px">{{ t('move_to') }}</label>
+                <select class="input" style="margin:0 6px 6px;width:auto" data-move="{{ r.id }}">
+                  <option value="__" selected disabled>{{ it.folder or '/' }}</option><option value="">/</option>
+                  {% for f in folders %}<option value="{{ f }}">{{ f }}</option>{% endfor %}
+                </select>
+                <hr>
+                {% if m.answers %}<a href="/answers/new?iso={{ r.id }}"><svg width="16" height="16"><use href="#i-wand"/></svg>{{ t('newans') }}</a>{% endif %}
+                <a href="/machines?new=1&iso={{ r.id }}"><svg width="16" height="16"><use href="#i-pin"/></svg>{{ t('addm') }}</a>
+                <button type="button" data-redetect="{{ r.id }}"><svg width="16" height="16"><use href="#i-refresh"/></svg>{{ t('redetect') }}</button>
+                <hr>
+                <button type="button" class="danger" data-delete="{{ r.id }}" data-name="{{ r.name }}"><svg width="16" height="16"><use href="#i-trash"/></svg>{{ t('delete') }}</button>
+              </div></div></td>
+          </tr>
+        {% endfor %}
+        </tbody></table></div>
+      {% else %}<div class="empty"><svg><use href="#i-disc"/></svg><b>{{ t('no_isos') }}</b><span class="small">{{ t('no_isos_sub') }}</span></div>{% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script>PXEPage.library();</script>{% endblock %}

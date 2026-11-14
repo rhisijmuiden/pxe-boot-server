@@ -1,0 +1,35 @@
+name: Build iPXE loaders
+
+# Rebuilds undionly.kpxe, ipxe.efi and snponly.efi with the embedded script
+# and opens a pull request when they changed.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: iPXE git ref
+        default: master
+  push:
+    branches: [test]
+    paths: ["ipxe/embed.ipxe", "ipxe/general.h", "ipxe/build.sh"]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build tools
+        run: sudo apt-get update -q && sudo apt-get install -y -q build-essential liblzma-dev mtools
+      - name: Build
+        run: bash ipxe/build.sh ipxe/bin "${{ github.event.inputs.ref || 'master' }}"
+      - name: Pull request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: ipxe-rebuild
+          commit-message: "iPXE loaders rebuilt"
+          title: "iPXE loaders rebuilt"
+          body: "Rebuilt by the Build iPXE loaders workflow."
+          add-paths: ipxe/bin

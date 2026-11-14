@@ -1,0 +1,101 @@
+<div class="toc">
+  <a href="#start">Aan de slag</a><a href="#how">Zo werkt booten</a><a href="#vlans">VLAN's met UniFi</a>
+  <a href="#firewall">Firewallregels</a><a href="#windows">Windows</a><a href="#linux">Linux & antwoordbestanden</a><a href="#trouble">Problemen oplossen</a>
+</div>
+
+<div class="panel"><div class="panel-b help" id="start">
+<h2>Aan de slag</h2>
+<ol>
+  <li>Open <a class="link" href="/network">Netwerk &amp; PXE</a>, vink de netwerkkaart(en) aan waar de clients op zitten en kies <strong>Proxy DHCP</strong>. Je router blijft IP-adressen uitdelen; deze server voegt alleen de bootinformatie toe.</li>
+  <li>Upload ISO-bestanden in de <a class="link" href="/library">ISO-bibliotheek</a>. Elke ISO wordt automatisch gekoppeld en herkend, en komt in het bootmenu.</li>
+  <li>Zet op de client <strong>Secure Boot</strong> uit en start via het netwerk (vaak F12, F11 of Esc tijdens het opstarten). Kies de ISO in het menu.</li>
+</ol>
+</div></div>
+
+<div class="panel"><div class="panel-b help" id="how">
+<h2>Zo werkt booten</h2>
+<ol>
+  <li>De firmware van de client stuurt een PXE-verzoek. dnsmasq op deze server antwoordt met een bootbestand: <code>undionly.kpxe</code> voor Legacy BIOS of <code>{{ uefi }}</code> voor UEFI, via TFTP.</li>
+  <li>Dat bestand is iPXE met een klein ingebouwd script. iPXE vraagt opnieuw DHCP aan en laadt <code>http://&lt;deze server&gt;/ipxe/boot.ipxe</code>.</li>
+  <li>Het menu wordt gemaakt uit de ISO-bibliotheek. Mappen worden submenu's. Een machine die je aan een ISO hebt gekoppeld slaat het menu over.</li>
+  <li>De gekozen ISO start met de methode die erbij past:
+    <ul>
+      <li><strong>Windows</strong>: wimboot laadt <code>boot.wim</code>. Setup leest daarna de rest van de ISO via de Windows-share <code>\\{{ server_ip }}\pxe</code> (TCP 445).</li>
+      <li><strong>Ubuntu, Debian, Rocky/Alma/Fedora, Arch, Proxmox</strong>: kernel en initrd komen via HTTP uit de gekoppelde ISO, met de juiste opties om de rest van de installatie te vinden.</li>
+      <li><strong>Al het andere</strong>: <code>sanboot</code> koppelt de ISO via HTTP als virtuele cd-rom. Dat werkt voor veel tools (memtest, firmware-updates). Een besturingssysteem dat de cd nodig heeft nadat zijn eigen kernel is gestart, vindt hem soms niet; probeer dan <em>memdisk</em> (alleen Legacy BIOS) via het menu in de bibliotheek.</li>
+    </ul></li>
+</ol>
+</div></div>
+
+<div class="panel"><div class="panel-b help" id="vlans">
+<h2>De PXE-server over meerdere VLAN's gebruiken met een UniFi UDM-Pro</h2>
+<p>PXE begint met een broadcast, en die gaat niet van het ene VLAN naar het andere. Er zijn drie manieren om clients in andere netwerken te bereiken. Optie A is het meest compleet: Legacy BIOS en UEFI werken in elk VLAN en je hoeft niets aan de firewall te doen.</p>
+
+<div class="opt"><h3>Optie A (aanbevolen): geef de server een poot in elk VLAN</h3>
+<ol>
+  <li>Open in UniFi Network de <strong>poortinstellingen</strong> van de switch waar de PXE-server op zit (UniFi Devices &gt; je switch &gt; Port Manager) en laat die poort de gewenste VLAN's als <em>tagged</em> netwerken doorgeven, met het hoofdnetwerk van de server als <em>native</em>. In recente versies heet dit "Native VLAN / Network" plus "Tagged VLAN Management: Allow All" of een eigen lijst.</li>
+  <li>Gebruik hier in <a class="link" href="/network">Netwerk &amp; PXE</a> de knop <strong>VLAN-interface toevoegen</strong>: kies de fysieke netwerkkaart, vul het VLAN-ID in en een vrij vast adres in dat VLAN (bijvoorbeeld <code>10.0.50.5/24</code>). Reserveer dat adres in UniFi of houd het buiten de DHCP-range.</li>
+  <li>Vink de nieuwe interface aan (bijvoorbeeld <code>eth0.50</code>) en klik op <strong>Toepassen</strong>. dnsmasq beantwoordt nu PXE-verzoeken in dat VLAN als proxy DHCP. De UDM-Pro blijft adressen uitdelen.</li>
+</ol>
+<p>Clients praten met het adres van de server in hun eigen VLAN. Het verkeer gaat dus niet via de UDM-Pro en je hebt geen firewallregels nodig.</p></div>
+
+<div class="opt"><h3>Optie B: UniFi Network Boot (DHCP-optie 66/67)</h3>
+<ol>
+  <li>Ga in UniFi Network naar <strong>Settings &gt; Networks</strong>, open het netwerk van de clients en zet onder <strong>DHCP</strong> de optie <strong>Network Boot</strong> aan (in sommige versies onder "Advanced" of "DHCP Service Management").</li>
+  <li>Server: <code>{{ server_ip }}</code>. Bestandsnaam: <code>{{ uefi }}</code> voor UEFI-clients, of <code>undionly.kpxe</code> voor Legacy BIOS-clients.</li>
+  <li>Voeg de firewallregels hieronder toe zodat het netwerk deze server kan bereiken.</li>
+</ol>
+<p>UniFi geeft elke client in dat netwerk dezelfde bestandsnaam, dus een netwerk gebruikt óf UEFI óf Legacy BIOS. De meeste huidige hardware is UEFI. Onze iPXE-bestanden bevatten een script dat de bootserver uit <em>next-server</em> haalt, dus er ontstaat geen lus.</p></div>
+
+<div class="opt"><h3>Optie C: een apart installatie-VLAN met DHCP-relay</h3>
+<ol>
+  <li>Maak in UniFi een netwerk zoals "Install" en zet de <strong>DHCP Mode</strong> op <strong>DHCP Relay</strong>, met <code>{{ server_ip }}</code> als server.</li>
+  <li>Kies hier <strong>Volledige DHCP-server</strong> en vul een bereik in het installatienetwerk in (bijvoorbeeld <code>10.0.60.100 - 10.0.60.200</code>), de UDM-Pro als gateway en je DNS-servers.</li>
+  <li>Voeg de firewallregels hieronder toe. Machines zet je tijdens de installatie in dit VLAN (poortprofiel op de switch).</li>
+</ol>
+<p>Legacy BIOS en UEFI werken allebei, omdat deze server per client het juiste bootbestand kiest.</p></div>
+</div></div>
+
+<div class="panel"><div class="panel-b help" id="firewall">
+<h2>Firewallregels voor optie B en C</h2>
+<p>Met de zone-gebaseerde firewall van UniFi Network 9 en nieuwer is verkeer tussen netwerken in de zone <em>Internal</em> standaard toegestaan. Heb je netwerken in aparte zones gezet of netwerkisolatie aangezet, maak dan een <strong>Allow</strong>-policy van het clientnetwerk naar deze server (<code>{{ server_ip }}</code>), met retourverkeer toegestaan:</p>
+<div class="tbl-wrap"><table>
+<thead><tr><th>Protocol</th><th>Poort</th><th>Waarvoor</th></tr></thead>
+<tbody>
+<tr><td>UDP</td><td class="num">69</td><td>TFTP: het iPXE-bootbestand</td></tr>
+<tr><td>UDP</td><td class="num">30000-30100</td><td>TFTP-data. dnsmasq gebruikt alleen dit bereik. Sta het toe van deze server naar de clients als retourverkeer niet automatisch wordt herkend.</td></tr>
+<tr><td>TCP</td><td class="num">80</td><td>Menu, kernels, installatieprogramma's, antwoordbestanden</td></tr>
+<tr><td>TCP</td><td class="num">445</td><td>Windows-installatiebestanden (SMB)</td></tr>
+<tr><td>UDP</td><td class="num">67, 4011</td><td>Alleen voor optie C (doorgestuurde DHCP en proxy DHCP)</td></tr>
+</tbody></table></div>
+</div></div>
+
+<div class="panel"><div class="panel-b help" id="windows">
+<h2>Windows</h2>
+<ul>
+  <li>Zet <strong>Secure Boot</strong> uit: iPXE en wimboot zijn niet door Microsoft ondertekend.</li>
+  <li>Setup draait vanaf de netwerkshare. Ziet setup geen schijf, dan heeft de ISO geen driver voor de opslagcontroller (vaak bij Intel VMD/RST). Zet VMD uit in de BIOS of voeg drivers toe aan <code>boot.wim</code>.</li>
+  <li>Windows 11 controleert TPM 2.0 en of Secure Boot mogelijk is, niet of het aan staat.</li>
+  <li>Legacy BIOS en UEFI werken allebei met dezelfde ISO.</li>
+</ul>
+</div></div>
+
+<div class="panel"><div class="panel-b help" id="linux">
+<h2>Linux en antwoordbestanden</h2>
+<ul>
+  <li><strong>Ubuntu</strong> laadt tijdens het opstarten de hele ISO in het geheugen. De client heeft dus minstens de grootte van de ISO plus 1 GB aan RAM nodig.</li>
+  <li><strong>Debian netinst en dvd</strong> starten het bijbehorende Debian-netwerkinstallatieprogramma, dat pakketten van een Debian-mirror haalt. Deze server downloadt dat programma eenmalig per versie.</li>
+  <li><strong>Proxmox VE</strong> laadt de hele ISO in het geheugen (ongeveer 1,5 GB). Voor een installatie zonder vragen maakt deze server een kopie van de ISO die zijn antwoordbestand via HTTP ophaalt; die kopie wordt gemaakt als je het antwoordbestand opslaat.</li>
+  <li>Met <a class="link" href="/answers">antwoordbestanden</a> installeer je zonder vragen. Koppel in <a class="link" href="/machines">Machines</a> een MAC-adres aan een ISO en antwoordbestand met "Alleen volgende boot", dan installeert de machine één keer en krijgt hij daarna weer het gewone menu.</li>
+</ul>
+</div></div>
+
+<div class="panel"><div class="panel-b help" id="trouble">
+<h2>Problemen oplossen</h2>
+<ul>
+  <li><strong>Helemaal geen PXE-antwoord</strong>: controleer of de juiste netwerkkaart is aangevinkt bij Netwerk &amp; PXE en of dnsmasq draait op het dashboard. In een ander VLAN: zie de opties hierboven.</li>
+  <li><strong>"No boot server found"</strong>: het DHCP-antwoord bevatte geen proxy DHCP en geen next-server. Bij optie B: controleer het serveradres bij Network Boot.</li>
+  <li><strong>Menu laadt, maar een ISO start niet</strong>: kies in de bibliotheek via het menu van die ISO een andere bootmethode en probeer opnieuw.</li>
+  <li><strong>Client toont het menu, maar moet van de lokale schijf starten</strong>: zet bij Bootmenu de standaardkeuze op "Start vanaf lokale schijf"; die wordt na de wachttijd gebruikt.</li>
+</ul>
+</div></div>

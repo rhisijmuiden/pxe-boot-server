@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main, test]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"   # Debian 13 ships Python 3.13
+      - name: Install
+        run: pip install -r requirements.txt pytest httpx
+      - name: Translations are generated and complete
+        run: |
+          python3 tools/strings.py
+          git diff --exit-code app/locales
+      - name: Tests
+        run: python -m pytest -q tests
+      - name: Shell scripts
+        run: |
+          bash -n install.sh bin/pxe-helper deploy/post-update.sh ipxe/build.sh
+          shellcheck -S warning install.sh bin/pxe-helper deploy/post-update.sh ipxe/build.sh

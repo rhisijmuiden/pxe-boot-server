@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% from "_head.html" import head %}
+{% block content %}
+{{ head(t('settings'), t('set_sub')) }}
+{% if user.role == 'admin' %}
+<form class="panel" method="post" action="/settings"><input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="panel-h"><h2>{{ t('general') }}</h2></div>
+  <div class="panel-b" style="display:flex;flex-direction:column;gap:20px"><div class="form">
+    <div class="field"><label for="sn">{{ t('srvname') }}</label><input class="input" id="sn" name="server_name" value="{{ server_name_v }}"></div>
+    <div class="field"><label for="dl">{{ t('deflang') }}</label><select class="input" id="dl" name="default_lang">{% for c, n in LANGS.items() %}<option value="{{ c }}" {{ 'selected' if c == default_lang }}>{{ n }}</option>{% endfor %}</select></div>
+    <div class="field full"><label for="isodir">{{ t('iso_dir') }}</label><input class="input num" id="isodir" value="{{ iso_dir }}" readonly><span class="hint">{{ t('iso_dir_hint') }}</span></div>
+  </div><div class="actions"><button class="btn btn-dark" type="submit">{{ t('save') }}</button></div></div>
+</form>
+<form class="panel" method="post" action="/settings/smb-password" data-confirm="{{ t('confirm_smb') }}"><input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="panel-h"><h2>{{ t('smb_title') }}</h2></div>
+  <div class="panel-b" style="display:flex;flex-direction:column;gap:14px"><p class="note" style="margin:0">{{ t('smb_sub') }}</p>
+  <div class="actions"><button class="btn btn-outline" type="submit"><svg><use href="#i-refresh"/></svg>{{ t('smb_rotate') }}</button></div></div>
+</form>
+{% endif %}
+<form class="panel" method="post" action="/account" id="account"><input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="panel-h"><h2>{{ t('account') }}</h2></div>
+  <div class="panel-b" style="display:flex;flex-direction:column;gap:20px"><div class="form">
+    <div class="field"><label for="a_name">{{ t('your_name') }}</label><input class="input" id="a_name" name="name" value="{{ user.name }}"></div>
+    <div class="field"><label for="a_email">{{ t('email') }}</label><input class="input" id="a_email" name="email" type="email" value="{{ user.email }}"></div>
+    <div class="field"><label for="a_cur">{{ t('current_password') }}</label><input class="input" id="a_cur" name="current_password" type="password" autocomplete="current-password"></div>
+    <div class="field"><label for="a_new">{{ t('new_password') }}</label><input class="input" id="a_new" name="new_password" type="password" minlength="8" autocomplete="new-password"></div>
+    <div class="field"><label for="a_new2">{{ t('password_repeat') }}</label><input class="input" id="a_new2" name="new_password2" type="password" minlength="8" autocomplete="new-password"></div>
+    <div class="field"><label for="a_theme">{{ t('theme') }}</label><select class="input" id="a_theme"><option value="">{{ t('theme_system') }}</option><option value="light">{{ t('theme_light') }}</option><option value="dark">{{ t('theme_dark') }}</option></select></div>
+  </div><div class="actions"><button class="btn btn-dark" type="submit">{{ t('save') }}</button></div></div>
+</form>
+{% endblock %}
+{% block scripts %}<script>PXEPage.settings();</script>{% endblock %}

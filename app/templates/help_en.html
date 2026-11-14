@@ -1,0 +1,101 @@
+<div class="toc">
+  <a href="#start">Getting started</a><a href="#how">How booting works</a><a href="#vlans">VLANs with UniFi</a>
+  <a href="#firewall">Firewall rules</a><a href="#windows">Windows</a><a href="#linux">Linux & answer files</a><a href="#trouble">Troubleshooting</a>
+</div>
+
+<div class="panel"><div class="panel-b help" id="start">
+<h2>Getting started</h2>
+<ol>
+  <li>Open <a class="link" href="/network">Network &amp; PXE</a>, tick the network interface(s) clients are on and choose <strong>Proxy DHCP</strong>. Your router keeps handing out IP addresses; this server only adds the boot information.</li>
+  <li>Upload ISO files in the <a class="link" href="/library">ISO library</a>. Each ISO is mounted and detected automatically, and appears in the boot menu.</li>
+  <li>On the client, turn off <strong>Secure Boot</strong> and start from the network (often F12, F11 or Esc during start-up). Choose the ISO in the menu.</li>
+</ol>
+</div></div>
+
+<div class="panel"><div class="panel-b help" id="how">
+<h2>How booting works</h2>
+<ol>
+  <li>The client's firmware sends a PXE request. dnsmasq on this server answers with a boot file: <code>undionly.kpxe</code> for Legacy BIOS or <code>{{ uefi }}</code> for UEFI, served over TFTP.</li>
+  <li>That file is iPXE with a small built-in script. iPXE asks DHCP again and loads <code>http://&lt;this server&gt;/ipxe/boot.ipxe</code>.</li>
+  <li>The menu is generated from the ISO library. Folders become submenus. A machine you linked to an ISO skips the menu.</li>
+  <li>The chosen ISO boots with the method that fits it:
+    <ul>
+      <li><strong>Windows</strong>: wimboot loads <code>boot.wim</code>. Setup then reads the rest of the ISO from the Windows share <code>\\{{ server_ip }}\pxe</code> (TCP 445).</li>
+      <li><strong>Ubuntu, Debian, Rocky/Alma/Fedora, Arch, Proxmox</strong>: the kernel and initrd come from the mounted ISO over HTTP, with the right options to find the rest of the installer.</li>
+      <li><strong>Everything else</strong>: <code>sanboot</code> attaches the ISO as a virtual CD-ROM over HTTP. This works for many tools (memtest, firmware updaters). An operating system that needs the CD after its own kernel has started may not find it; then try <em>memdisk</em> (Legacy BIOS only) via the menu in the library.</li>
+    </ul></li>
+</ol>
+</div></div>
+
+<div class="panel"><div class="panel-b help" id="vlans">
+<h2>Using the PXE server across VLANs with a UniFi UDM-Pro</h2>
+<p>PXE starts with a broadcast that does not cross VLANs. There are three ways to reach clients on other networks. Option A is the most complete: it supports Legacy BIOS and UEFI on every VLAN and needs no firewall changes.</p>
+
+<div class="opt"><h3>Option A (recommended): give the server a leg in every VLAN</h3>
+<ol>
+  <li>In UniFi Network, open <strong>Ports</strong> on the switch the PXE server is connected to (UniFi Devices &gt; your switch &gt; Port Manager) and set that port to carry the VLANs you want as <em>tagged</em> networks, with the server's main network as <em>native</em>. In recent versions this is "Native VLAN / Network" plus "Tagged VLAN Management: Allow All" or a custom list.</li>
+  <li>Here, in <a class="link" href="/network">Network &amp; PXE</a>, use <strong>Add VLAN interface</strong>: pick the physical interface, enter the VLAN ID and a free static address in that VLAN (for example <code>10.0.50.5/24</code>). Reserve that address in UniFi or keep it outside the DHCP range.</li>
+  <li>Tick the new interface (for example <code>eth0.50</code>) and click <strong>Apply</strong>. dnsmasq now answers PXE requests in that VLAN as proxy DHCP. The UDM-Pro keeps handing out addresses.</li>
+</ol>
+<p>Clients talk to the server's address in their own VLAN, so traffic is not routed through the UDM-Pro and no firewall rules are needed.</p></div>
+
+<div class="opt"><h3>Option B: UniFi Network Boot (DHCP option 66/67)</h3>
+<ol>
+  <li>In UniFi Network go to <strong>Settings &gt; Networks</strong>, open the client network, and under <strong>DHCP</strong> enable <strong>Network Boot</strong> (in some versions under "Advanced" or "DHCP Service Management").</li>
+  <li>Server: <code>{{ server_ip }}</code>. Filename: <code>{{ uefi }}</code> for UEFI clients, or <code>undionly.kpxe</code> for Legacy BIOS clients.</li>
+  <li>Add the firewall rules below so the network can reach this server.</li>
+</ol>
+<p>UniFi sends one file name to every client on that network, so a network uses either UEFI or Legacy BIOS. Most current hardware is UEFI. Our iPXE files include a script that reads the boot server from <em>next-server</em>, so there is no chainload loop.</p></div>
+
+<div class="opt"><h3>Option C: a dedicated install VLAN with DHCP relay</h3>
+<ol>
+  <li>Create a network such as "Install" in UniFi and set its <strong>DHCP Mode</strong> to <strong>DHCP Relay</strong>, pointing at <code>{{ server_ip }}</code>.</li>
+  <li>Here, choose <strong>Full DHCP server</strong> and enter a range in the install network (for example <code>10.0.60.100 - 10.0.60.200</code>), the UDM-Pro as gateway and your DNS servers.</li>
+  <li>Add the firewall rules below. Machines are moved to this VLAN (switch port profile) while they are installed.</li>
+</ol>
+<p>Both Legacy BIOS and UEFI work, because this server picks the boot file per client.</p></div>
+</div></div>
+
+<div class="panel"><div class="panel-b help" id="firewall">
+<h2>Firewall rules for options B and C</h2>
+<p>With the zone-based firewall of UniFi Network 9 and later, traffic between networks in the <em>Internal</em> zone is allowed by default. If you put networks in separate zones or turned on network isolation, add an <strong>Allow</strong> policy from the client network to this server (<code>{{ server_ip }}</code>), with return traffic allowed:</p>
+<div class="tbl-wrap"><table>
+<thead><tr><th>Protocol</th><th>Port</th><th>Used for</th></tr></thead>
+<tbody>
+<tr><td>UDP</td><td class="num">69</td><td>TFTP: the iPXE boot file</td></tr>
+<tr><td>UDP</td><td class="num">30000-30100</td><td>TFTP data. dnsmasq is limited to this range. Allow it from this server to the clients if return traffic is not matched automatically.</td></tr>
+<tr><td>TCP</td><td class="num">80</td><td>Menu, kernels, installers, answer files</td></tr>
+<tr><td>TCP</td><td class="num">445</td><td>Windows setup files (SMB)</td></tr>
+<tr><td>UDP</td><td class="num">67, 4011</td><td>Only for option C (relayed DHCP and proxy DHCP)</td></tr>
+</tbody></table></div>
+</div></div>
+
+<div class="panel"><div class="panel-b help" id="windows">
+<h2>Windows</h2>
+<ul>
+  <li>Turn off <strong>Secure Boot</strong>: iPXE and wimboot are not signed by Microsoft.</li>
+  <li>Setup runs from the network share. If setup cannot find a disk, the ISO has no driver for the storage controller (common with Intel VMD/RST). Turn VMD off in the BIOS or add drivers to <code>boot.wim</code>.</li>
+  <li>Windows 11 checks TPM 2.0 and Secure Boot capability, not whether Secure Boot is switched on.</li>
+  <li>Both Legacy BIOS and UEFI work with the same ISO.</li>
+</ul>
+</div></div>
+
+<div class="panel"><div class="panel-b help" id="linux">
+<h2>Linux and answer files</h2>
+<ul>
+  <li><strong>Ubuntu</strong> downloads the whole ISO into memory during boot, so the client needs RAM of at least the ISO size plus 1 GB.</li>
+  <li><strong>Debian netinst and DVD</strong> boot the matching Debian network installer, which installs packages from a Debian mirror. This server downloads that installer once per release.</li>
+  <li><strong>Proxmox VE</strong> loads the whole ISO into memory (about 1.5 GB). For an unattended install, this server makes a copy of the ISO that fetches its answer file over HTTP; that copy is built when you save the answer file.</li>
+  <li><a class="link" href="/answers">Answer files</a> turn an install into a hands-off one. Link a machine's MAC address to an ISO and answer file in <a class="link" href="/machines">Machines</a> with "Next boot only", and the machine installs once and then gets the normal menu again.</li>
+</ul>
+</div></div>
+
+<div class="panel"><div class="panel-b help" id="trouble">
+<h2>Troubleshooting</h2>
+<ul>
+  <li><strong>No PXE answer at all</strong>: check that the right interface is ticked in Network &amp; PXE and that dnsmasq is running on the dashboard. On another VLAN, see the options above.</li>
+  <li><strong>"No boot server found"</strong>: the DHCP answer contained neither proxy DHCP nor next-server. With option B, check the Network Boot server address.</li>
+  <li><strong>Menu loads but an ISO fails</strong>: open the ISO's menu in the library and choose another boot method, then try again.</li>
+  <li><strong>Client shows the menu but you want local disk</strong>: set the default entry to "Boot from local disk" in Boot menu; it is used after the timeout.</li>
+</ul>
+</div></div>

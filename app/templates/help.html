@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% from "_head.html" import head %}
+{% block content %}
+{{ head(t('help'), t('help_sub')) }}
+{% include "help_" ~ (lang if lang in ['en', 'nl'] else 'en') ~ ".html" %}
+{% endblock %}

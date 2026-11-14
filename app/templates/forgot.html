@@ -1,0 +1,13 @@
+{% extends "auth_base.html" %}
+{% block title %}{{ t('forgot_password') }}{% endblock %}
+{% block content %}
+<div><h1>{{ t('forgot_password') }}</h1><p>{{ t('forgot_sub') if mail_ok else t('forgot_nomail') }}</p></div>
+{% if mail_ok %}
+<form method="post" action="/forgot" style="display:flex;flex-direction:column;gap:14px">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="field"><label for="email">{{ t('username_or_email') }}</label><input class="input" id="email" name="email" required autofocus></div>
+  <button class="btn btn-accent btn-block" type="submit">{{ t('send_reset') }}</button>
+</form>
+{% endif %}
+<a class="link small" href="/login">{{ t('back_to_login') }}</a>
+{% endblock %}

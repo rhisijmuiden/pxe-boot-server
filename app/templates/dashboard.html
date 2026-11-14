@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_head.html" import head %}
+{% block content %}
+{% set act %}<a class="btn btn-accent" href="/library">{{ '<svg><use href="#i-upload"/></svg>'|safe }}{{ t('upload') }}</a>{% endset %}
+{{ head(t('dashboard'), t('dash_sub'), act) }}
+{% if needs_network %}
+<div class="callout"><svg><use href="#i-info"/></svg><span>{{ t('dash_setup_network') }} <a class="link" href="/network">{{ t('network') }}</a></span></div>
+{% endif %}
+<div class="grid-4">
+  <div class="panel stat"><span class="lbl">{{ t('s_isos') }}</span><span class="val">{{ iso_count }}</span><span class="sub">{{ folder_count }} {{ t('folders_lc') }}</span></div>
+  <div class="panel stat"><span class="lbl">{{ t('s_disk') }}</span><span class="val">{{ used|bytes }}</span>
+    <div class="meter"><i style="width:{{ (used / total * 100) if total else 0 }}%"></i></div><span class="sub">{{ t('of') }} {{ total|bytes }}</span></div>
+  <div class="panel stat"><span class="lbl">{{ t('s_boots') }}</span><span class="val">{{ boots_today.values()|sum }}</span>
+    <span class="sub">{{ boots_today.get('UEFI', 0) }} UEFI · {{ boots_today.get('BIOS', 0) }} BIOS</span></div>
+  <div class="panel stat"><span class="lbl">{{ t('s_clients') }}</span><span class="val">{{ clients7 }}</span><span class="sub">{{ t('s_clients_sub') }}</span></div>
+</div>
+
+<div class="panel">
+  <div class="panel-h"><h2>{{ t('active') }} · <span id="dashActiveN">0</span></h2><a class="btn btn-outline btn-sm" href="/live">{{ t('live') }}</a></div>
+  <div class="tbl-wrap"><table><tbody id="dashActive"><tr><td class="note">{{ t('nolive') }}</td></tr></tbody></table></div>
+</div>
+
+<div class="panel"><div class="panel-h"><h2>{{ t('how') }}</h2><a class="link small" href="/help">{{ t('help') }}</a></div><div class="panel-b"><div class="steps">
+  {% for n in [1,2,3,4] %}<div class="step"><span class="n">{{ n }}</span><b>{{ t('st' ~ n) }}</b><small>{{ t('st' ~ n ~ 'd') }}</small></div>{% endfor %}
+</div></div></div>
+
+<div class="grid-2">
+  <div class="panel"><div class="panel-h"><h2>{{ t('services') }}</h2><span class="note num">{{ server_ip }}{% if interfaces %} · {{ interfaces|join(', ') }}{% endif %}</span></div><ul class="svc">
+    {% for s in services %}<li>
+      <span class="pill {{ 'ok' if s.state == 'active' else ('warn' if s.state in ('activating','reloading','unknown') else 'off') }}">{{ t('state_' + s.state) if s.state in ('active','inactive','failed') else s.state }}</span>
+      <span>{{ t(s.key) }}</span><span class="meta hide-sm num">{{ s.ports }}</span></li>{% endfor %}
+  </ul></div>
+  <div class="panel"><div class="panel-h"><h2>{{ t('recent') }}</h2><a class="btn btn-outline btn-sm" href="/bootlog">{{ t('bootlog') }}</a></div>
+    {% if recent %}<div class="tbl-wrap"><table><tbody>
+    {% for b in recent %}<tr><td class="num">{{ b.ts|time }}</td><td class="num">{{ b.mac or b.ip }}</td><td><span class="chip yes">{{ b.platform or '–' }}</span></td>
+      <td>{{ b.iso_name }}{% if b.event == 'done' %} <span class="pill ok">{{ t('ev_done') }}</span>{% endif %}</td></tr>{% endfor %}
+    </tbody></table></div>
+    {% else %}<div class="empty"><svg><use href="#i-log"/></svg><span>{{ t('no_boots') }}</span></div>{% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script>PXEPage.dashboard();</script>{% endblock %}

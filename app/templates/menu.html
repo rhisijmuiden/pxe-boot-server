@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% from "_head.html" import head %}
+{% block content %}
+{{ head(t('bootmenu'), t('bm_sub')) }}
+<div class="grid-2" style="grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)">
+  <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+    <div class="tabs" role="tablist"><button type="button" class="on" data-fw="efi">UEFI</button><button type="button" data-fw="pcbios">Legacy BIOS</button></div>
+    <div class="term" id="menuPreview" aria-live="polite"></div>
+    <p class="note small">{{ t('bm_preview_note') }}</p>
+    <details><summary class="link small">{{ t('bm_show_script') }}</summary><div class="code-wrap" style="margin-top:10px"><pre class="code" id="menuScript"></pre></div></details>
+  </div>
+  <div class="panel"><div class="panel-h"><h2>{{ t('settings') }}</h2></div><form class="panel-b" method="post" action="/menu" style="display:flex;flex-direction:column;gap:16px">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="field"><label for="title">{{ t('bm_title') }}</label><input class="input" id="title" name="title" value="{{ title }}" placeholder="{{ server_name }}" maxlength="60"></div>
+    <div class="field"><label for="default">{{ t('bm_default') }}</label><select class="input" id="default" name="default">
+      <option value="local">{{ t('local') }}</option>{% for r in isos %}<option value="{{ r.id }}" {{ 'selected' if default == r.id|string }}>{{ r.name }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="timeout">{{ t('bm_timeout') }}</label><input class="input" id="timeout" name="timeout" type="number" min="0" max="3600" value="{{ timeout }}"><span class="hint">{{ t('bm_timeout_hint') }}</span></div>
+    <div class="actions"><button class="btn btn-dark" type="submit">{{ t('save') }}</button></div>
+  </form></div>
+</div>
+{% endblock %}
+{% block scripts %}<script>PXEPage.menu();</script>{% endblock %}

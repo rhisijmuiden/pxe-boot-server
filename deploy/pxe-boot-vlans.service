@@ -1,0 +1,13 @@
+[Unit]
+Description=PXE Boot Server VLAN interfaces
+After=network-online.target
+Wants=network-online.target
+Before=dnsmasq.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/pxe-boot-server/bin/pxe-helper restore-vlans
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% from "_head.html" import head %}
+{% block content %}
+{{ head(t('live'), t('live_sub')) }}
+<div class="clients" id="clients"></div>
+<div class="panel" id="liveEmpty" hidden><div class="empty"><svg><use href="#i-pulse"/></svg><b>{{ t('nolive') }}</b><span class="small">{{ t('nolive_sub') }}</span></div></div>
+<div class="callout"><svg><use href="#i-info"/></svg><span>{{ t('live_note') }}</span></div>
+{% endblock %}
+{% block scripts %}<script>PXEPage.live();</script>{% endblock %}

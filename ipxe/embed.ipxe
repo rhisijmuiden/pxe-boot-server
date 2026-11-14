@@ -1,0 +1,25 @@
+#!ipxe
+# Embedded in the PXE Boot Server iPXE binaries.
+# Works with proxy DHCP (dnsmasq on this server) and with a router that only
+# sets next-server / option 66 (for example UniFi "Network Boot").
+echo PXE Boot Server - starting network ...
+:retry
+dhcp || goto dhcp_failed
+isset ${proxydhcp/dhcp-server} && set pxe ${proxydhcp/dhcp-server} && goto found ||
+isset ${next-server} && set pxe ${next-server} && goto found ||
+goto no_server
+:found
+echo Boot server: ${pxe}
+chain --autofree http://${pxe}/ipxe/boot.ipxe || goto chain_failed
+:dhcp_failed
+echo No DHCP answer, retrying in 3 seconds ...
+sleep 3
+goto retry
+:no_server
+echo No boot server found in the DHCP answer (proxy DHCP or next-server).
+prompt --timeout 10000 Press any key for the iPXE shell ... && shell ||
+goto retry
+:chain_failed
+echo Could not load http://${pxe}/ipxe/boot.ipxe
+prompt --timeout 10000 Press any key for the iPXE shell ... && shell ||
+goto retry

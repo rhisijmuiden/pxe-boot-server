@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "_head.html" import head %}
+{% block content %}
+{{ head(t('stats'), t('stats_sub')) }}
+<div class="grid-4">
+  <div class="panel stat"><span class="lbl">{{ t('bw') }} · {{ t('bw_now') }}</span><span class="val" id="bwNow">–</span><span class="sub" id="bwLink"></span></div>
+  <div class="panel stat"><span class="lbl">{{ t('bw_peak') }}</span><span class="val" id="bwPeak">–</span><span class="sub">{{ t('bw_peak_sub') }}</span></div>
+  <div class="panel stat"><span class="lbl">{{ t('bw_today') }}</span><span class="val" id="sentToday">{{ sent_today|bytes }}</span><span class="sub">{{ t('bw_today_sub') }}</span></div>
+  <div class="panel stat"><span class="lbl">{{ t('tasks_t') }}</span><span class="val" id="tasksN">0</span><span class="sub" id="tasksSub">&nbsp;</span></div>
+</div>
+<div class="panel"><div class="panel-h"><h2>{{ t('bw') }} (Mbit/s)</h2>
+  <div class="legend"><span><i></i>{{ t('bw_out') }}</span><span><i class="b"></i>{{ t('bw_in') }}</span></div></div>
+  <div class="panel-b chart-wrap" id="bwChart" style="height:240px"></div></div>
+<div class="panel"><div class="panel-h"><h2>{{ t('tasks_t') }}</h2><a class="btn btn-outline btn-sm" href="/live">{{ t('live') }}</a></div>
+  <div class="tasks"><div><b id="tkMenu">0</b><small>{{ t('tk_boot') }}</small></div><div><b id="tkLoad">0</b><small>{{ t('tk_load') }}</small></div>
+  <div><b id="tkInst">0</b><small>{{ t('tk_inst') }}</small></div><div><b id="tkUp">0</b><small>{{ t('tk_up') }}</small></div></div></div>
+<div class="grid-2">
+  <div class="panel"><div class="panel-h"><h2>{{ t('top_iso') }}</h2><span class="note">{{ boots30 }} {{ t('boots_lc') }} · {{ installs30 }} {{ t('installs_lc') }}</span></div><div class="panel-b">
+    {% if top %}<div class="hbars">{% set mx = top[0].n %}
+      {% for r in top %}<div class="hb"><b title="{{ r.iso_name }}">{{ r.iso_name }}</b><div class="tr"><i style="width:{{ r.n / mx * 100 }}%"></i></div><span>{{ r.n }}</span></div>{% endfor %}
+    </div>{% else %}<div class="empty"><span>{{ t('no_boots') }}</span></div>{% endif %}
+  </div></div>
+  <div class="panel"><div class="panel-h"><h2>{{ t('traffic_14d') }}</h2></div><div class="panel-b chart-wrap" id="dayChart" style="height:220px"
+     data-days='{{ days|tojson }}'></div></div>
+</div>
+{% endblock %}
+{% block scripts %}<script>PXEPage.stats();</script>{% endblock %}

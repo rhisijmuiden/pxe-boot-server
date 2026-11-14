@@ -1,0 +1,16 @@
+{% extends "auth_base.html" %}
+{% block title %}{{ t('setup_title') }}{% endblock %}
+{% block content %}
+<div><h1>{{ t('setup_title') }}</h1><p>{{ t('setup_sub') }}</p></div>
+<form method="post" action="/setup" style="display:flex;flex-direction:column;gap:14px">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="field"><label for="server_name">{{ t('srvname') }}</label><input class="input" id="server_name" name="server_name" value="{{ server_name }}"></div>
+  <div class="field"><label for="name">{{ t('your_name') }}</label><input class="input" id="name" name="name" required></div>
+  <div class="field"><label for="username">{{ t('username') }}</label><input class="input" id="username" name="username" value="admin" required autocomplete="username"></div>
+  <div class="field"><label for="email">{{ t('email') }}</label><input class="input" id="email" name="email" type="email"><span class="hint">{{ t('email_hint') }}</span></div>
+  <div class="field"><label for="password">{{ t('password') }}</label><input class="input" id="password" name="password" type="password" minlength="8" required autocomplete="new-password"></div>
+  <div class="field"><label for="password2">{{ t('password_repeat') }}</label><input class="input" id="password2" name="password2" type="password" minlength="8" required autocomplete="new-password"></div>
+  <div class="field"><label for="lang">{{ t('deflang') }}</label><select class="input" id="lang" name="lang">{% for c, n in LANGS.items() %}<option value="{{ c }}" {{ 'selected' if c == lang }}>{{ n }}</option>{% endfor %}</select></div>
+  <button class="btn btn-accent btn-block" type="submit">{{ t('setup_go') }}</button>
+</form>
+{% endblock %}

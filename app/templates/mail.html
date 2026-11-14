@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "_head.html" import head %}
+{% block content %}
+{{ head(t('mail'), t('mail_sub')) }}
+<form class="panel" method="post" action="/mail" id="mailForm">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="panel-h"><h2>{{ t('mail_server') }}</h2></div>
+  <div class="panel-b" style="display:flex;flex-direction:column;gap:20px"><div class="form">
+    <div class="field"><label for="m_host">{{ t('host') }}</label><input class="input" id="m_host" name="host" value="{{ s.host }}" placeholder="smtp.office365.com"></div>
+    <div class="field"><label for="m_port">{{ t('port') }}</label><input class="input num" id="m_port" name="port" type="number" value="{{ s.port }}"></div>
+    <div class="field"><label for="m_sec">{{ t('enc') }}</label><select class="input" id="m_sec" name="security">
+      <option value="starttls" {{ 'selected' if s.security == 'starttls' }}>STARTTLS ({{ t('port') }} 587)</option>
+      <option value="ssl" {{ 'selected' if s.security == 'ssl' }}>SSL/TLS ({{ t('port') }} 465)</option>
+      <option value="none" {{ 'selected' if s.security == 'none' }}>{{ t('enc_none') }}</option></select></div>
+    <div class="field"><label>&nbsp;</label><label class="check-row"><input type="checkbox" name="verify" value="1" {{ 'checked' if s.verify }}> {{ t('verify') }}</label></div>
+    <div class="field"><label for="m_user">{{ t('auth') }}</label><input class="input" id="m_user" name="username" value="{{ s.username }}" autocomplete="off"></div>
+    <div class="field"><label for="m_pw">{{ t('pass') }}</label><input class="input" id="m_pw" name="password" type="password" value="{{ s.password }}" autocomplete="new-password"></div>
+    <div class="field"><label for="m_from">{{ t('from') }}</label><input class="input" id="m_from" name="from_addr" type="email" value="{{ s.from_addr }}"></div>
+    <div class="field"><label for="m_fromname">{{ t('fromname') }}</label><input class="input" id="m_fromname" name="from_name" value="{{ s.from_name }}"></div>
+    <div class="field"><label for="m_reply">{{ t('replyto') }}</label><input class="input" id="m_reply" name="reply_to" type="email" value="{{ s.reply_to }}"></div>
+  </div>
+  <h3>{{ t('notifications') }}</h3>
+  <div class="form">
+    <div class="field full"><label for="m_notify">{{ t('notify_to') }}</label><input class="input" id="m_notify" name="notify_to" value="{{ s.notify_to }}" placeholder="it@example.com, tech@example.com"></div>
+    <label class="check-row"><input type="checkbox" name="notify_upload" value="1" {{ 'checked' if s.notify_upload }}> {{ t('notify_upload') }}</label>
+    <label class="check-row"><input type="checkbox" name="notify_install" value="1" {{ 'checked' if s.notify_install }}> {{ t('notify_install') }}</label>
+  </div>
+  <div class="actions" style="justify-content:space-between;flex-wrap:wrap">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><input class="input" id="m_testto" type="email" placeholder="{{ user.email or 'you@example.com' }}" style="width:240px">
+      <button class="btn btn-outline" type="button" id="testMail"><svg><use href="#i-send"/></svg>{{ t('testmail') }}</button></div>
+    <button class="btn btn-dark" type="submit">{{ t('save') }}</button></div>
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}<script>PXEPage.mail();</script>{% endblock %}

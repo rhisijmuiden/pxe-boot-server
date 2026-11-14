@@ -1,0 +1,193 @@
+#!/usr/bin/env bash
+# PXE Boot Server root helper.
+#
+# The web app runs as the unprivileged user "pxeboot" and calls this script through
+# sudo for the few things that need root. Every argument is validated here; the
+# sudoers rule only allows this exact file, which is owned by root.
+set -euo pipefail
+umask 022
+export LC_ALL=C PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+REPO="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+SRV_DIR=/srv/pxe
+ISO_DIR=$SRV_DIR/isos
+MNT_DIR=$SRV_DIR/mnt
+DATA_DIR=/var/lib/pxe-boot-server
+LOG_DIR=/var/log/pxe-boot-server
+ETC_DIR=/etc/pxe-boot-server
+VLAN_FILE=$ETC_DIR/vlans.conf
+DNSMASQ_CONF=/etc/dnsmasq.d/pxe-boot-server.conf
+# shellcheck source=/dev/null
+[ -r "$ETC_DIR/helper.env" ] && . "$ETC_DIR/helper.env"
+
+die() { echo "$*" >&2; exit 1; }
+is_id() { [[ "$1" =~ ^[0-9]{1,9}$ ]]; }
+is_ifname() { [[ "$1" =~ ^[A-Za-z0-9_-]{1,12}$ ]] && [ -e "/sys/class/net/$1" ]; }
+is_channel() { [[ "$1" == main || "$1" == test ]]; }
+git_repo() { git -c safe.directory="$REPO" -C "$REPO" "$@"; }
+
+cmd_mount() {
+  local rel="${1:?relpath}" id="${2:?id}"
+  is_id "$id" || die "bad id"
+  [[ "$rel" != /* && "$rel" != *..* && "$rel" =~ \.[iI][sS][oO]$ ]] || die "bad path"
+  local iso; iso="$(realpath -e -- "$ISO_DIR/$rel")" || die "ISO not found"
+  [[ "$iso" == "$ISO_DIR"/* && -f "$iso" ]] || die "ISO outside library"
+  local dir="$MNT_DIR/$id"
+  mkdir -p "$dir"
+  mountpoint -q "$dir" && return 0
+  # UDF first: Windows ISOs only show a stub README through ISO 9660.
+  mount -t udf -o loop,ro,nodev,nosuid,noexec -- "$iso" "$dir" 2>/dev/null || \
+    mount -o loop,ro,nodev,nosuid,noexec -- "$iso" "$dir"
+}
+
+cmd_umount() {
+  local id="${1:?id}"
+  is_id "$id" || die "bad id"
+  local dir="$MNT_DIR/$id"
+  if mountpoint -q "$dir"; then umount "$dir" 2>/dev/null || umount -l "$dir"; fi
+  rmdir "$dir" 2>/dev/null || true
+}
+
+cmd_apply_dnsmasq() {
+  local src="$DATA_DIR/dnsmasq.conf"
+  [ -f "$src" ] || die "no staged config"
+  [ "$(stat -c %s "$src")" -lt 65536 ] || die "config too large"
+  # Only plain dnsmasq options that the app generates are accepted.
+  if grep -Ev '^(#.*|)$' "$src" | grep -Evq '^(port|bind-dynamic|log-dhcp|quiet-dhcp|interface|enable-tftp|tftp-root|tftp-port-range|dhcp-match|dhcp-range|dhcp-option|dhcp-authoritative|dhcp-boot|dhcp-no-override|pxe-prompt|pxe-service)\b'; then
+    die "unexpected option in staged config"
+  fi
+  if grep -Eq '^(conf-|dhcp-script|tftp-root=[^/])' "$src"; then die "forbidden option"; fi
+  local tmp; tmp="$(mktemp)"
+  cp "$src" "$tmp"
+  dnsmasq --test -C "$tmp" >/dev/null 2>&1 || { rm -f "$tmp"; die "dnsmasq rejected the configuration"; }
+  install -m 644 "$tmp" "$DNSMASQ_CONF"
+  rm -f "$tmp"
+  systemctl restart dnsmasq
+  systemctl is-active -q dnsmasq || die "dnsmasq did not start: $(journalctl -u dnsmasq -n 3 --no-pager -o cat 2>/dev/null | tr '\n' ' ')"
+}
+
+cmd_smbstatus() {
+  smbstatus --json 2>/dev/null || echo '{}'
+}
+
+cmd_smb_password() {
+  local pw
+  IFS= read -r pw || true
+  [[ "$pw" =~ ^[A-Za-z0-9_-]{12,64}$ ]] || die "bad password"
+  printf '%s\n%s\n' "$pw" "$pw" | smbpasswd -s -a pxe >/dev/null
+  smbpasswd -e pxe >/dev/null
+}
+
+vlan_up() {  # parent vid addr
+  local parent="$1" vid="$2" addr="$3" name="$1.$2"
+  ip link show "$name" >/dev/null 2>&1 || ip link add link "$parent" name "$name" type vlan id "$vid"
+  ip link set "$parent" up
+  ip link set "$name" up
+  if [ "$addr" = dhcp ]; then
+    if command -v dhcpcd >/dev/null; then dhcpcd -b "$name" >/dev/null 2>&1 || true
+    elif command -v dhclient >/dev/null; then dhclient -nw "$name" >/dev/null 2>&1 || true
+    else die "no DHCP client installed; enter a static address"; fi
+  else
+    ip addr replace "$addr" dev "$name"
+  fi
+}
+
+cmd_add_vlan() {
+  local parent="${1:?parent}" vid="${2:?vid}" addr="${3:?address}"
+  is_ifname "$parent" || die "unknown interface"
+  [[ "$vid" =~ ^[0-9]{1,4}$ ]] && (( vid >= 1 && vid <= 4094 )) || die "bad VLAN id"
+  [[ "$addr" == dhcp || "$addr" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$ ]] || die "bad address"
+  vlan_up "$parent" "$vid" "$addr"
+  mkdir -p "$ETC_DIR"; touch "$VLAN_FILE"
+  grep -v "^$parent $vid " "$VLAN_FILE" > "$VLAN_FILE.tmp" || true
+  echo "$parent $vid $addr" >> "$VLAN_FILE.tmp"
+  mv "$VLAN_FILE.tmp" "$VLAN_FILE"
+}
+
+cmd_del_vlan() {
+  local name="${1:?name}"
+  [[ "$name" =~ ^([A-Za-z0-9_-]{1,12})\.([0-9]{1,4})$ ]] || die "bad name"
+  local parent="${BASH_REMATCH[1]}" vid="${BASH_REMATCH[2]}"
+  if [ -f "$VLAN_FILE" ]; then
+    grep -v "^$parent $vid " "$VLAN_FILE" > "$VLAN_FILE.tmp" || true
+    mv "$VLAN_FILE.tmp" "$VLAN_FILE"
+  fi
+  ip link show "$name" >/dev/null 2>&1 && ip link del "$name"
+  return 0
+}
+
+cmd_restore_vlans() {  # used by pxe-boot-vlans.service at boot
+  [ -f "$VLAN_FILE" ] || return 0
+  local parent vid addr
+  while read -r parent vid addr; do
+    [ -n "${parent:-}" ] || continue
+    is_ifname "$parent" || { echo "skip $parent.$vid: no $parent" >&2; continue; }
+    vlan_up "$parent" "$vid" "$addr" || echo "failed $parent.$vid" >&2
+  done < "$VLAN_FILE"
+}
+
+cmd_check_update() {
+  local ch="${1:?channel}"
+  is_channel "$ch" || die "bad channel"
+  timeout 45 git -c safe.directory="$REPO" -C "$REPO" fetch -q origin "+refs/heads/$ch:refs/remotes/origin/$ch" || die "cannot reach the update server"
+  local local_c remote_c behind rv
+  local_c="$(git_repo rev-parse HEAD)"
+  remote_c="$(git_repo rev-parse "origin/$ch")"
+  behind="$(git_repo rev-list --count "HEAD..origin/$ch")"
+  rv="$(git_repo show "origin/$ch:VERSION" 2>/dev/null | tr -dc '0-9A-Za-z.+-')"
+  local avail=false
+  [ "$local_c" != "$remote_c" ] && avail=true
+  printf '{"local":"%s","remote":"%s","behind":%d,"remote_version":"%s","available":%s,"branch":"%s"}\n' \
+    "${local_c:0:7}" "${remote_c:0:7}" "$behind" "$rv" "$avail" "$(git_repo rev-parse --abbrev-ref HEAD)"
+}
+
+cmd_update() {
+  local ch="${1:?channel}"
+  is_channel "$ch" || die "bad channel"
+  mkdir -p "$LOG_DIR"
+  : > "$LOG_DIR/update.log"
+  chmod 644 "$LOG_DIR/update.log"
+  systemctl reset-failed pxe-boot-update.service >/dev/null 2>&1 || true
+  # Runs outside the web app's service so restarting the app does not kill the update.
+  systemd-run --quiet --unit=pxe-boot-update --collect \
+    --property=StandardOutput=append:"$LOG_DIR/update.log" \
+    --property=StandardError=append:"$LOG_DIR/update.log" \
+    "$REPO/bin/pxe-helper" do-update "$ch"
+}
+
+cmd_do_update() {
+  local ch="${1:?channel}"
+  is_channel "$ch" || die "bad channel"
+  echo "== $(date -Is) updating to channel '$ch'"
+  if git_repo fetch origin "+refs/heads/$ch:refs/remotes/origin/$ch" && \
+     git_repo checkout -q -B "$ch" "origin/$ch" && \
+     git_repo reset -q --hard "origin/$ch" && \
+     bash "$REPO/deploy/post-update.sh"; then
+    echo "Now at $(cat "$REPO/VERSION") ($(git_repo rev-parse --short HEAD), $ch)"
+    echo "UPDATE OK"
+    # Restart last: the log line above is already written.
+    systemctl restart pxe-boot-server.service
+  else
+    echo "UPDATE FAILED"
+    exit 1
+  fi
+}
+
+main() {
+  local c="${1:-}"; shift || true
+  case "$c" in
+    mount) cmd_mount "$@" ;;
+    umount) cmd_umount "$@" ;;
+    apply-dnsmasq) cmd_apply_dnsmasq ;;
+    smbstatus) cmd_smbstatus ;;
+    smb-password) cmd_smb_password ;;
+    add-vlan) cmd_add_vlan "$@" ;;
+    del-vlan) cmd_del_vlan "$@" ;;
+    restore-vlans) cmd_restore_vlans ;;
+    check-update) cmd_check_update "$@" ;;
+    update) cmd_update "$@" ;;
+    do-update) cmd_do_update "$@" ;;
+    *) die "usage: pxe-helper {mount|umount|apply-dnsmasq|smbstatus|smb-password|add-vlan|del-vlan|restore-vlans|check-update|update|do-update}" ;;
+  esac
+}
+main "$@"

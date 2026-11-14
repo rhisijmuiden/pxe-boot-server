@@ -1,0 +1,12 @@
+{% extends "auth_base.html" %}
+{% block title %}{{ t('sign_in') }}{% endblock %}
+{% block content %}
+<div><h1>{{ t('sign_in') }}</h1><p>{{ t('sign_in_sub') }}</p></div>
+<form method="post" action="/login" style="display:flex;flex-direction:column;gap:14px">
+  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ next }}">
+  <div class="field"><label for="username">{{ t('username_or_email') }}</label><input class="input" id="username" name="username" autocomplete="username" required autofocus></div>
+  <div class="field"><label for="password">{{ t('password') }}</label><input class="input" id="password" name="password" type="password" autocomplete="current-password" required></div>
+  <button class="btn btn-accent btn-block" type="submit">{{ t('sign_in') }}</button>
+</form>
+<a class="link small" href="/forgot">{{ t('forgot_password') }}</a>
+{% endblock %}
