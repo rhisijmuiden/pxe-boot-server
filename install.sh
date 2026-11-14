@@ -64,7 +64,17 @@ say "Getting the code ($CHANNEL)"
 git config --system --get-all safe.directory 2>/dev/null | grep -qx "$DEST" || git config --system --add safe.directory "$DEST"
 if [ -d "$DEST/.git" ]; then
   git -C "$DEST" fetch -q origin "+refs/heads/$CHANNEL:refs/remotes/origin/$CHANNEL"
-  git -C "$DEST" checkout -q -B "$CHANNEL" "origin/$CHANNEL"
+  if [ -n "$(git -C "$DEST" status --porcelain 2>/dev/null)" ]; then
+    # Keep a copy of local code edits, then continue with a clean checkout.
+    BK="/var/lib/pxe-boot-server/update-backups/$(date +%Y%m%d-%H%M%S)"
+    mkdir -p "$BK"
+    git -C "$DEST" diff HEAD > "$BK/local-changes.patch" || true
+    git -C "$DEST" status --porcelain > "$BK/files.txt" || true
+    say "Local changes in $DEST saved to $BK and discarded"
+    git -C "$DEST" reset -q --hard HEAD
+    git -C "$DEST" clean -q -f -d
+  fi
+  git -C "$DEST" checkout -q -f -B "$CHANNEL" "origin/$CHANNEL"
   git -C "$DEST" reset -q --hard "origin/$CHANNEL"
 else
   git clone -q --branch "$CHANNEL" "$REPO_URL" "$DEST"

@@ -17,6 +17,7 @@ LOG_DIR=/var/log/pxe-boot-server
 ETC_DIR=/etc/pxe-boot-server
 VLAN_FILE=$ETC_DIR/vlans.conf
 DNSMASQ_CONF=/etc/dnsmasq.d/pxe-boot-server.conf
+BACKUP_DIR=/var/lib/pxe-boot-server/update-backups
 # shellcheck source=/dev/null
 [ -r "$ETC_DIR/helper.env" ] && . "$ETC_DIR/helper.env"
 
@@ -155,12 +156,34 @@ cmd_update() {
     "$REPO/bin/pxe-helper" do-update "$ch"
 }
 
+# Local edits to the code (tracked files, or stray files in the repository) would block
+# a checkout. Save them to a backup archive, log them, and remove them. Data, settings
+# and ISOs live outside the repository and are never touched; ignored files (venv) stay.
+save_local_changes() {
+  local changed untracked stamp dir
+  changed="$(git_repo diff --name-only HEAD 2>/dev/null || true)"
+  untracked="$(git_repo ls-files --others --exclude-standard 2>/dev/null || true)"
+  [ -n "$changed$untracked" ] || return 0
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  dir="$BACKUP_DIR/$stamp"
+  mkdir -p "$dir"
+  chmod 700 "$BACKUP_DIR"
+  git_repo diff HEAD > "$dir/local-changes.patch" 2>/dev/null || true
+  { printf '%s\n' "$changed"; printf '%s\n' "$untracked"; } | sed '/^$/d' > "$dir/files.txt"
+  (cd "$REPO" && tar -czf "$dir/files.tar.gz" -T "$dir/files.txt" 2>/dev/null) || true
+  echo "Local changes in the code were found and discarded. Backup: $dir"
+  sed 's/^/  - /' "$dir/files.txt"
+  git_repo reset -q --hard HEAD
+  git_repo clean -q -f -d
+}
+
 cmd_do_update() {
   local ch="${1:?channel}"
   is_channel "$ch" || die "bad channel"
   echo "== $(date -Is) updating to channel '$ch'"
   if git_repo fetch origin "+refs/heads/$ch:refs/remotes/origin/$ch" && \
-     git_repo checkout -q -B "$ch" "origin/$ch" && \
+     save_local_changes && \
+     git_repo checkout -q -f -B "$ch" "origin/$ch" && \
      git_repo reset -q --hard "origin/$ch" && \
      bash "$REPO/deploy/post-update.sh"; then
     echo "Now at $(cat "$REPO/VERSION") ($(git_repo rev-parse --short HEAD), $ch)"
