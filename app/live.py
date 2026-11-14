@@ -31,6 +31,13 @@ BANDWIDTH: deque = deque(maxlen=300)  # (ts, rx_bps, tx_bps)
 _log_offset = 0
 _log_bytes: dict[str, list[tuple[float, int]]] = {}  # ip -> [(ts, bytes)] for boot file downloads
 _smb: dict[str, str] = {}             # ip -> file currently open on the share
+_smb_sessions: set[str] = set()       # ips with an SMB session (Windows Setup connected)
+
+# How long a client stays in the list without activity, per phase (seconds).
+IDLE_LIMIT = {"done": 300, "installer": 1200}
+DEFAULT_IDLE = 1200
+MAX_AGE = 6 * 3600  # safety net: nothing stays in the list longer than this
+SMB_GONE_AFTER = 60  # Windows Setup disconnected from the share for this long = copying finished
 _started = False
 DAILY: dict[str, int] = {}             # date -> bytes of boot files sent
 
@@ -161,7 +168,7 @@ def _inflight() -> dict[str, int]:
 
 
 def _read_smb() -> None:
-    global _smb
+    global _smb, _smb_sessions
     try:
         out = system.helper("smbstatus", timeout=10)
         data = json.loads(out or "{}")
@@ -172,6 +179,7 @@ def _read_smb() -> None:
         pid = str((s.get("server_id") or {}).get("pid", ""))
         ip = s.get("remote_machine") or s.get("hostname") or ""
         pid_ip[pid] = ip.replace("ipv4:", "").split(":")[0]
+    _smb_sessions = {ip for ip in pid_ip.values() if ip}
     res = {}
     for path, f in (data.get("open_files") or {}).items():
         for o in (f.get("opens") or {}).values():
@@ -200,6 +208,7 @@ def _sample(prev: dict, prev_t: float) -> tuple[dict, float]:
 
     _read_nginx_log()
     inflight = _inflight()
+    finished: list[dict] = []
     with _lock:
         for ip, c in list(CLIENTS.items()):
             if c["phase"] in ("loading", "installer") and c.get("load_started"):
@@ -214,17 +223,38 @@ def _sample(prev: dict, prev_t: float) -> tuple[dict, float]:
                         and ip not in inflight:
                     c["phase"] = "installer"
                     c["phase_since"] = now
-            if ip in _smb:
-                c["file"] = _smb[ip]
+            if ip in _smb or ip in _smb_sessions:
+                c["file"] = _smb.get(ip, c.get("file", ""))
                 c["updated"] = now
+                c["smb_seen"] = now
                 if c["phase"] == "loading":
                     c["phase"] = "installer"
                     c["phase_since"] = now
+            elif c.get("smb_seen") and c["phase"] == "installer" and now - c["smb_seen"] > SMB_GONE_AFTER:
+                # Windows Setup has copied everything and restarted the PC into the new install.
+                c["phase"] = "done"
+                c["phase_since"] = now
+                c["updated"] = now
+                c["file"] = ""
+                finished.append(dict(c))
             idle = now - c.get("updated", now)
-            limit = {"done": 1800, "installer": 7200}.get(c["phase"], 1200)
-            if idle > limit:
+            if idle > IDLE_LIMIT.get(c["phase"], DEFAULT_IDLE) or now - c["started"] > MAX_AGE:
                 del CLIENTS[ip]
+    for c in finished:
+        _finished(c)
     return counters, now
+
+
+def _finished(c: dict) -> None:
+    """Record a Windows install that left the share in the boot log, and send the notification."""
+    try:
+        db.log_event("done", mac=c.get("mac", ""), ip=c.get("ip", ""), platform=c.get("platform", ""),
+                     hostname=c.get("hostname", ""), iso_id=c.get("iso_id"), iso_name=c.get("iso_name", ""))
+        from . import mailer
+        mailer.notify("install", f"Installation finished: {c.get('hostname') or c.get('ip')}",
+                      f"{c.get('iso_name', '')}\nIP: {c.get('ip', '')}\nMAC: {c.get('mac', '')}")
+    except Exception:  # noqa: BLE001
+        log.exception("recording finished install")
 
 
 def _loop() -> None:

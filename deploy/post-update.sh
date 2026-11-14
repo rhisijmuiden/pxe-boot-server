@@ -61,7 +61,10 @@ install -m 440 "$REPO/deploy/sudoers" /etc/sudoers.d/pxe-boot-server
 
 step "samba share"
 if [ -f /etc/samba/smb.conf ]; then
-  sed -i '/^# >>> pxe-boot-server/,/^# <<< pxe-boot-server/d' /etc/samba/smb.conf
+  sed -i '/^# >>> pxe-boot-server-global/,/^# <<< pxe-boot-server-global/d' /etc/samba/smb.conf
+  sed -i '/^# >>> pxe-boot-server$/,/^# <<< pxe-boot-server$/d' /etc/samba/smb.conf
+  # Global options go right after the [global] line, the share at the end of the file.
+  sed -i "/^\[global\]/r $REPO/deploy/smb-global.conf" /etc/samba/smb.conf
   cat "$REPO/deploy/smb-share.conf" >> /etc/samba/smb.conf
   testparm -s /etc/samba/smb.conf >/dev/null 2>&1 || { echo "smb.conf check failed" >&2; exit 1; }
   systemctl enable -q smbd
