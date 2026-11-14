@@ -194,10 +194,17 @@ def boot_script(server_ip: str, row, ctx: dict, answer=None) -> str:
     m = lambda p: mnt_url(b, row, p)  # noqa: E731
 
     if method == "windows":
+        aq = f"&answer={answer['id']}" if answer is not None and answer["format"] == "autounattend" else ""
         body = [
             f"kernel {b}/boot/wimboot gui",
             f"initrd -n winpeshl.ini {b}/ipxe/winpe/{row['id']}/winpeshl.ini winpeshl.ini",
-            f"initrd -n install.cmd {b}/ipxe/winpe/{row['id']}/install.cmd?{q} install.cmd",
+            f"initrd -n install.cmd {b}/ipxe/winpe/{row['id']}/install.cmd?{q}{aq} install.cmd",
+        ]
+        if aq:
+            # wimboot puts it in X:\Windows\System32, where install.cmd hands it to Setup
+            body.append(f"initrd -n autounattend.xml {b}/ipxe/winpe/{row['id']}/autounattend.xml?{q}{aq} "
+                        "autounattend.xml")
+        body += [
             f"initrd -n BCD {m(info['bcd'])} BCD",
             f"initrd -n boot.sdi {m(info['sdi'])} boot.sdi",
             f"initrd -n boot.wim {m(info['wim'])} boot.wim",
@@ -243,14 +250,26 @@ def boot_script(server_ip: str, row, ctx: dict, answer=None) -> str:
     return "\n".join(head + body + fail)
 
 
-def winpe_files(server_ip: str, row, ctx: dict) -> dict[str, str]:
-    """Startup files injected into WinPE by wimboot: connect the share and run setup."""
+def winpe_files(server_ip: str, row, ctx: dict, answer=None) -> dict[str, str]:
+    """Startup files injected into WinPE by wimboot: connect the share and run setup.
+    With a Windows answer profile, also autounattend.xml and an unattended Setup."""
     info = isos.iso_info(row)
     pw = db.get_setting("smb_password") or ""
     setup = info.get("setup") or "setup.exe"
     share = f"\\\\{server_ip}\\pxe"
     folder = str(row["id"])
     winpeshl = "[LaunchApps]\r\n\"install.cmd\"\r\n"
+    unattended, setup_args, files = [], "", {}
+    if answer is not None and answer["format"] == "autounattend":
+        d = answers_mod.effective_data(answer, ctx.get("mac", ""))
+        files["autounattend.xml"] = answers_mod.render(
+            answer, base(server_ip), ctx.get("mac", ""), ctx.get("platform", "efi")).get("autounattend.xml", "")
+        if d.get("win_bypass", True):
+            # Windows 11 hardware checks, set before Setup starts
+            unattended += [f"reg add HKLM\\SYSTEM\\Setup\\LabConfig /v {v} /t REG_DWORD /d 1 /f >nul"
+                           for v in ("BypassTPMCheck", "BypassSecureBootCheck", "BypassRAMCheck")]
+        unattended.append("echo Unattended installation: " + _txt(answer["name"]).replace("%", "%%"))
+        setup_args = " /unattend:X:\\Windows\\System32\\autounattend.xml"
     install = "\r\n".join([
         "@echo off",
         "title PXE Boot Server - Windows Setup",
@@ -270,11 +289,12 @@ def winpe_files(server_ip: str, row, ctx: dict) -> dict[str, str]:
         "  cmd /k",
         ")",
         f"echo Starting Windows Setup from {share}\\{folder} ...",
-        f"Z:\\{folder}\\{setup.replace('/', chr(92))}",
+        *unattended,
+        f"Z:\\{folder}\\{setup.replace('/', chr(92))}{setup_args}",
         "if errorlevel 1 (",
         "  echo Windows Setup could not be started. Update the PXE Boot Server and try again.",
         ")",
         "cmd /k",
         "",
     ])
-    return {"winpeshl.ini": winpeshl, "install.cmd": install}
+    return {"winpeshl.ini": winpeshl, "install.cmd": install, **files}

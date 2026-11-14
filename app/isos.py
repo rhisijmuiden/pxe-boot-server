@@ -18,7 +18,7 @@ _lock = threading.RLock()
 
 # Boot methods. "fw" lists the firmware types the method works on.
 METHODS: dict[str, dict] = {
-    "windows": {"label": "Windows (wimboot)", "fw": ["bios", "efi"], "answers": None},
+    "windows": {"label": "Windows (wimboot)", "fw": ["bios", "efi"], "answers": "autounattend"},
     "ubuntu": {"label": "Ubuntu / casper (url=)", "fw": ["bios", "efi"], "answers": "autoinstall"},
     "debian_installer": {"label": "Debian installer (netboot)", "fw": ["bios", "efi"], "answers": "preseed"},
     "debian_live": {"label": "Debian live (fetch=)", "fw": ["bios", "efi"], "answers": None},
@@ -249,6 +249,9 @@ def process(iso_id: int) -> None:
     try:
         mount(row)
         det = detect(mount_dir(iso_id))
+        if det.method == "windows":
+            from . import windows
+            det.info["editions"] = windows.editions(mount_dir(iso_id), det.info.get("install", ""))
         db.run("UPDATE isos SET method=?, info=?, status='ready', error='' WHERE id=?",
                det.method, json.dumps(det.info), iso_id)
         if det.method == "debian_installer":

@@ -18,7 +18,7 @@ Een netwerkbootserver voor Debian 13 die werkt als Ventoy via het netwerk. Uploa
 | Bootmenu | Gemaakt uit de bibliotheek. Standaardkeuze, wachttijd, titel en een live voorbeeld van het iPXE-menu. |
 | Live clients | Welke client wat aan het booten is, firmwaretype, voortgang en snelheid. |
 | Statistieken | Bandbreedte in de tijd, verstuurde data per dag, lopende taken, populairste ISO's. |
-| Antwoordbestanden | Wizard in zes stappen voor installaties zonder vragen: Ubuntu autoinstall, Debian preseed, Kickstart en Proxmox `answer.toml`. |
+| Antwoordbestanden | Wizard in zes stappen voor installaties zonder vragen: Windows `autounattend.xml` (editie, productcode, lokale beheerder, schijf, Win11-controles), Ubuntu autoinstall, Debian preseed, Kickstart en Proxmox `answer.toml`. |
 | Machines | Koppel een MAC-adres aan een ISO (en eventueel een antwoordbestand), altijd of alleen voor de volgende boot. |
 | Netwerk & PXE | Proxy DHCP naast je bestaande router (standaard) of een volledige DHCP-server; netwerkkaarten kiezen; VLAN-interfaces toevoegen. |
 | VLAN-handleidingen | Stap voor stap voor UniFi UDM-Pro, in de app en in [docs/](docs/howto-vlan-unifi.nl.md). |

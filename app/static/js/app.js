@@ -589,13 +589,40 @@
     }
     function applyFormat() {
       const f = fmt();
-      $$("[data-only]", form).forEach((el) => { el.hidden = el.dataset.only !== f; });
-      $$("[data-not]", form).forEach((el) => { el.hidden = el.dataset.not === f; });
-      const st = $("#w_network").value === "static";
+      $$("[data-only]", form).forEach((el) => { el.hidden = !el.dataset.only.split(" ").includes(f); });
+      $$("[data-not]", form).forEach((el) => { el.hidden = el.dataset.not.split(" ").includes(f); });
+      const st = $("#w_network").value === "static" && f !== "autounattend";
       $$("[data-static]", form).forEach((el) => { el.hidden = !st; });
+      const wipeOn = $("#w_win_disk") && $("#w_win_disk").value === "wipe";
+      $$("[data-wipe]", form).forEach((el) => { el.hidden = !wipeOn; });
       const opt = iso.selectedOptions[0];
       $("#entryPreview").textContent = `${opt ? opt.textContent : ""} - ${$("#w_name").value || "…"} (unattended)`;
     }
+    // Windows: editions read from the ISO; a plain index field when they are unknown
+    const edSel = $("#w_win_edition"), edIdx = $("#w_win_index"), edHint = $("#w_edition_hint");
+    let edIso = null;
+    function fillEditions() {
+      if (!edSel) return;
+      const opt = iso.selectedOptions[0];
+      if (!opt || opt.value === edIso) return;
+      edIso = opt.value;
+      let eds = [];
+      try { eds = JSON.parse(opt.dataset.editions || "[]"); } catch (e) { eds = []; }
+      edSel.innerHTML = "";
+      eds.forEach((e) => {
+        const o = document.createElement("option");
+        o.value = e.index;
+        o.textContent = `${e.index}. ${e.name}${e.lang ? " · " + e.lang : ""}${e.arch ? " · " + e.arch : ""}`;
+        edSel.appendChild(o);
+      });
+      const want = edIdx.value || edSel.dataset.value;
+      if (eds.some((e) => String(e.index) === String(want))) edSel.value = want;
+      edSel.hidden = !eds.length; edIdx.hidden = !!eds.length; edHint.hidden = !!eds.length;
+      if (eds.length) edIdx.value = edSel.value;
+    }
+    if (edSel) edSel.addEventListener("change", () => { edIdx.value = edSel.value; });
+    iso.addEventListener("change", () => { edIso = null; fillEditions(); });
+    fillEditions();
     let timer = null;
     function preview() {
       clearTimeout(timer);

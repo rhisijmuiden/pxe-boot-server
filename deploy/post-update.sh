@@ -21,6 +21,10 @@ chown -R root:root "$REPO"
 chmod 755 "$REPO/bin/pxe-helper" "$REPO/deploy/post-update.sh" "$REPO/install.sh" 2>/dev/null || true
 git config --system --get-all safe.directory 2>/dev/null | grep -qx "$REPO" || git config --system --add safe.directory "$REPO"
 
+step "packages"
+# wimlib reads the Windows editions from install.wim / install.esd / install.swm
+command -v wimlib-imagex >/dev/null || apt-get -o DPkg::Lock::Timeout=600 install -y -q --no-install-recommends wimtools || echo "wimtools could not be installed; Windows editions will not be listed"
+
 step "python environment"
 [ -x "$REPO/venv/bin/python" ] || python3 -m venv "$REPO/venv"
 "$REPO/venv/bin/pip" install -q --disable-pip-version-check --upgrade pip

@@ -18,7 +18,7 @@ A network boot server for Debian 13 that works like Ventoy over the network. Upl
 | Boot menu | Generated from the library. Default entry, timeout, title, and a live preview of the iPXE menu. |
 | Live clients | Which client is booting what, firmware type, progress and transfer speed. |
 | Statistics | Bandwidth over time, data served per day, running tasks, top ISOs. |
-| Answer files | Six-step wizard for unattended installs: Ubuntu autoinstall, Debian preseed, Kickstart and Proxmox `answer.toml`. |
+| Answer files | Six-step wizard for unattended installs: Windows `autounattend.xml` (edition, key, local admin, disk, Win11 checks), Ubuntu autoinstall, Debian preseed, Kickstart and Proxmox `answer.toml`. |
 | Machines | Link a MAC address to an ISO (and optionally an answer file), always or for the next boot only. |
 | Network & PXE | Proxy DHCP next to your existing router (default) or a full DHCP server; choose interfaces; add VLAN interfaces. |
 | VLAN how-tos | Step-by-step guides for UniFi UDM-Pro, in the app and in [docs/](docs/howto-vlan-unifi.md). |
