@@ -38,3 +38,17 @@ def test_windows_boot_uses_wimboot(iso_row):
 def test_unknown_iso_uses_sanboot(iso_row):
     row = iso_row({"x.bin": ""})
     assert "sanboot" in ipxe.boot_script("10.0.0.5", row, CTX)
+
+
+def test_entry_script_exits_after_menu():
+    # "Boot from local disk" returns from the menu; the entry script must hand back to the firmware.
+    lines = ipxe.entry_script("10.0.0.5").splitlines()
+    chain = next(i for i, line in enumerate(lines) if line.startswith("chain "))
+    assert lines[chain + 1:chain + 3][-1].strip() == "exit 0" or "exit 0" in lines[chain + 1:chain + 3]
+
+
+def test_embedded_script_exits_after_menu():
+    from pathlib import Path
+    embed = (Path(__file__).resolve().parent.parent / "ipxe" / "embed.ipxe").read_text().splitlines()
+    chain = next(i for i, line in enumerate(embed) if "/ipxe/boot.ipxe" in line)
+    assert "exit 0" in [x.strip() for x in embed[chain + 1:chain + 3]]

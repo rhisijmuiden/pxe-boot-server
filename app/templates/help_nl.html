@@ -97,5 +97,6 @@
   <li><strong>"No boot server found"</strong>: het DHCP-antwoord bevatte geen proxy DHCP en geen next-server. Bij optie B: controleer het serveradres bij Network Boot.</li>
   <li><strong>Menu laadt, maar een ISO start niet</strong>: kies in de bibliotheek via het menu van die ISO een andere bootmethode en probeer opnieuw.</li>
   <li><strong>Client toont het menu, maar moet van de lokale schijf starten</strong>: zet bij Bootmenu de standaardkeuze op "Start vanaf lokale schijf"; die wordt na de wachttijd gebruikt.</li>
+  <li><strong>VM in Proxmox VE start niet via het netwerk met UEFI</strong>: geef de VM een EFI-schijf in het 2MB OVMF-formaat. In onze tests startte het 4MB-formaat niet via het netwerk. VM's met Legacy BIOS (SeaBIOS) werken zoals ze zijn.</li>
 </ul>
 </div></div>
