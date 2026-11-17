@@ -118,6 +118,21 @@ SCHEMA = [
         updated REAL NOT NULL
     );
     """,
+    # version 4: machine groups. A machine without its own ISO follows its group; a group can also
+    # catch unknown machines by MAC prefix (for example 52:54:00 for Proxmox/QEMU VMs).
+    """
+    CREATE TABLE machine_groups (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        prefixes TEXT NOT NULL DEFAULT '',
+        iso_id INTEGER REFERENCES isos(id) ON DELETE SET NULL,
+        answer_id INTEGER REFERENCES answers(id) ON DELETE SET NULL,
+        mode TEXT NOT NULL DEFAULT 'default',
+        created REAL NOT NULL
+    );
+    ALTER TABLE machines ADD COLUMN group_id INTEGER REFERENCES machine_groups(id) ON DELETE SET NULL;
+    ALTER TABLE machines ADD COLUMN group_used INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 
 

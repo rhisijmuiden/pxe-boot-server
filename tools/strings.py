@@ -133,7 +133,7 @@ S = {
 "err_confirm_wipe": ("Confirm that the disk may be wiped.", "Bevestig dat de schijf gewist mag worden."),
 "err_answer_iso": ("This ISO does not support answer files.", "Deze ISO ondersteunt geen antwoordbestanden."),
 # machines
-"m_sub": ("Link a MAC address to an ISO, with or without an answer file. That machine then skips the menu and starts straight away.", "Koppel een MAC-adres aan een ISO, met of zonder antwoordbestand. Die machine slaat dan het menu over en start meteen."),
+"m_sub": ("Boot rules per machine or per group: which ISO, with or without an answer file, once, always or as the preselected menu entry.", "Bootregels per machine of per groep: welke ISO, met of zonder antwoordbestand, eenmalig, altijd of als voorgeselecteerde menukeuze."),
 "addm": ("Link machine", "Machine koppelen"), "m_form": ("Link machine", "Machine koppelen"), "m_name": ("Name", "Naam"),
 "m_name_hint": ("Also used as hostname in unattended installs, and as computer name for Windows (at most 15 characters).", "Wordt ook gebruikt als hostnaam bij installaties zonder vragen, en als computernaam bij Windows (maximaal 15 tekens)."),
 "m_iso": ("ISO", "ISO"), "m_ans": ("Answer file", "Antwoordbestand"), "m_none": ("None (the installer asks questions)", "Geen (installatie stelt vragen)"),
@@ -268,6 +268,25 @@ S = {
 "js_cat_verifying": ("Verifying…", "Controleren…"), "js_cat_retry": ("Retry", "Opnieuw"),
 "js_cat_verified": ("checksum OK", "checksum klopt"), "js_cat_unverified": ("not verified", "niet gecontroleerd"),
 "js_cat_mismatch": ("Checksum does not match, file removed. Try again.", "Checksum klopt niet, bestand verwijderd. Probeer het opnieuw."),
+# machine groups
+"addg": ("New group", "Nieuwe groep"), "groups": ("Groups", "Groepen"), "g_form": ("Group", "Groep"), "g_name": ("Group name", "Groepsnaam"),
+"g_prefixes": ("MAC prefixes", "MAC-prefixen"),
+"g_prefixes_hint": ("Optional. Unknown machines whose MAC starts with one of these join the group on their first boot, for example 52:54:00 or bc:24:11 for Proxmox VMs.", "Optioneel. Onbekende machines waarvan het MAC-adres hiermee begint, komen bij hun eerste boot in de groep, bijvoorbeeld 52:54:00 of bc:24:11 voor Proxmox-VM's."),
+"g_menu_only": ("None, show the normal menu", "Geen, toon het gewone menu"),
+"gmo_once_d": ("Every machine in the group boots it once, then gets the normal menu again.", "Elke machine in de groep start dit één keer en krijgt daarna weer het gewone menu."),
+"gmo_always_d": ("Every machine in the group always starts this ISO.", "Elke machine in de groep start altijd deze ISO."),
+"gmo_default_d": ("Machines in the group see the menu with this ISO preselected.", "Machines in de groep zien het menu met deze ISO voorgeselecteerd."),
+"g_members": ("Machines", "Machines"), "g_used_n": ("{n} already used it", "{n} al gebruikt"),
+"g_rearm": ("Use again for all machines", "Opnieuw voor alle machines"),
+"no_groups": ("No groups yet", "Nog geen groepen"),
+"no_groups_sub": ("Groups give many machines the same boot rule, by hand or by MAC prefix.", "Groepen geven veel machines dezelfde bootregel, met de hand of op MAC-prefix."),
+"m_group": ("Group", "Groep"), "m_nogroup": ("No group", "Geen groep"),
+"m_group_hint": ("Without its own ISO the machine follows the rule of its group.", "Zonder eigen ISO volgt de machine de regel van zijn groep."),
+"m_follow": ("None, follow the group or show the menu", "Geen, volg de groep of toon het menu"),
+"via_group": ("via group", "via groep"), "menu_only": ("Normal menu", "Gewoon menu"),
+"group_saved": ("Group saved.", "Groep opgeslagen."),
+"err_prefix": ("Enter MAC prefixes like 52:54:00, separated by commas.", "Vul MAC-prefixen in zoals 52:54:00, gescheiden door komma's."),
+"err_group_name": ("Give the group a name.", "Geef de groep een naam."),
 }
 
 if __name__ == "__main__":

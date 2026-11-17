@@ -764,11 +764,21 @@
   Page.machines = function () {
     const pick = $("#mf_pick"), mac = $("#mf_mac"), isoSel = $("#mf_iso"), ans = $("#mf_ans");
     if (pick) pick.addEventListener("change", () => { if (pick.value) mac.value = pick.value; });
+    const modes = $("#mf_modes");
     function filter() {
       if (!isoSel) return;
       $$("option[data-iso]", ans).forEach((o) => { o.hidden = o.dataset.iso !== isoSel.value; if (o.hidden && o.selected) ans.value = ""; });
+      ans.disabled = !isoSel.value;
+      if (modes) modes.hidden = !isoSel.value;
     }
     if (isoSel) { isoSel.addEventListener("change", filter); filter(); }
+    $$("[data-del-group]").forEach((b) => b.addEventListener("click", async () => {
+      if (!(await confirmBox(t("js_confirm_delete", {name: b.dataset.name}), t("js_delete"), true))) return;
+      await api("DELETE", "/api/groups/" + b.dataset.delGroup); location.reload();
+    }));
+    $$("[data-rearm-group]").forEach((b) => b.addEventListener("click", async () => {
+      await api("POST", `/api/groups/${b.dataset.rearmGroup}/rearm`); location.reload();
+    }));
     $$("[data-del-machine]").forEach((b) => b.addEventListener("click", async () => {
       if (!(await confirmBox(t("js_confirm_delete", {name: b.dataset.name}), t("js_delete"), true))) return;
       await api("DELETE", "/api/machines/" + b.dataset.delMachine); location.reload();
