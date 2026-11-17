@@ -65,7 +65,14 @@ def test_menu_endpoint_boots_group_iso(iso):
     _group(iso["id"], "once", "02:ee")
     c = TestClient(app)
     mac = "02:ee:00:00:00:09"
-    r1 = c.get(f"/ipxe/menu.ipxe?mac={mac}&platform=efi", headers={"host": "10.0.0.5"})
-    assert "kernel" in r1.text and "choose" not in r1.text
-    r2 = c.get(f"/ipxe/menu.ipxe?mac={mac}&platform=efi", headers={"host": "10.0.0.5"})
-    assert "choose" in r2.text
+    h = {"host": "10.0.0.5"}
+    r1 = c.get(f"/ipxe/menu.ipxe?mac={mac}&platform=efi", headers=h)
+    assert "choose --default auto --timeout" in r1.text and "&auto=1" in r1.text
+    # Still armed until the ISO is actually chosen
+    assert "&auto=1" in c.get(f"/ipxe/menu.ipxe?mac={mac}&platform=efi", headers=h).text
+    manual = c.get(f"/ipxe/menu.ipxe?mac={mac}&platform=efi&manual=1", headers=h).text
+    assert "&auto=1" not in manual and "Boot from local disk" in manual
+    boot = c.get(f"/ipxe/iso/{iso['id']}.ipxe?mac={mac}&platform=efi&auto=1", headers=h)
+    assert "kernel" in boot.text
+    r2 = c.get(f"/ipxe/menu.ipxe?mac={mac}&platform=efi", headers=h)
+    assert "&auto=1" not in r2.text and "choose" in r2.text

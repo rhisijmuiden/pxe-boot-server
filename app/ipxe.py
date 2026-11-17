@@ -44,9 +44,65 @@ def platform_ok(method: str, platform: str) -> bool:
     return ("efi" if platform == "efi" else "bios") in fw
 
 
+# ---------------------------------------------------------------- look and feel
+
+# Text area of the framebuffer console, inside the frame drawn in static/img/ipxe-bg.png.
+SCREEN = {"x": 1024, "y": 768, "left": 352, "right": 52, "top": 56, "bottom": 92}
+ROW_WIDTH = 54  # characters per menu line; meta text is right aligned, clear of the countdown
+TOOL_TAGS = ("MEM", "CZ", "GP")
+
+
+def theme_lines(b: str) -> list[str]:
+    """RHIS look: background picture on UEFI (framebuffer console), brand colours everywhere.
+    Every command is optional (`||`): BIOS builds have no framebuffer and some firmware
+    cannot do 1024x768, then the menu falls back to coloured text."""
+    s = SCREEN
+    return [
+        "isset ${pxe_theme} && goto theme_done ||",
+        "set pxe_theme text",
+        f"iseq ${{platform}} efi && console --x {s['x']} --y {s['y']} --left {s['left']} --right {s['right']} "
+        f"--top {s['top']} --bottom {s['bottom']} --picture {b}/static/img/ipxe-bg.png && set pxe_theme fb ||",
+        "colour --rgb 0x14213d 4 ||",   # blue    -> nacht
+        "colour --rgb 0xff6b57 1 ||",   # red     -> koraal
+        "colour --rgb 0x9cc3ff 6 ||",   # cyan    -> lucht
+        "colour --rgb 0xe6ecf7 7 ||",   # white   -> wolk
+        "colour --rgb 0xb8392a 3 ||",   # yellow  -> koraal, dark (selected item; iPXE draws it bold,
+                                        #            which lightens the text, so it needs a dark ground)
+        "cpair --foreground 6 --background 9 0 ||",  # default (title, text): lucht, transparent
+        "cpair --foreground 7 --background 9 1 ||",  # menu items
+        "cpair --foreground 7 --background 3 2 ||",  # selected item: white on dark koraal
+        "cpair --foreground 1 --background 9 3 ||",  # section headers: koraal
+        "cpair --foreground 7 --background 4 4 ||",  # edit boxes
+        "cpair --foreground 1 --background 9 5 ||",  # alerts
+        ":theme_done",
+    ]
+
+
+# iPXE splits command lines on spaces, so runs of spaces collapse (and a no-break space breaks the
+# menu layout). Dot leaders line up the right column instead.
+def _row(label: str, meta: str = "") -> str:
+    label = _txt(label)
+    meta = _txt(meta)
+    if not meta:
+        return label
+    room = ROW_WIDTH - len(meta) - 2
+    if len(label) > room - 2:
+        label = label[:max(0, room - 3)] + "~"
+    return f"{label} {'.' * (room - len(label))} {meta}"
+
+
+def _kv(key: str, value: str) -> str:
+    return f"item --gap -- {key} {'.' * (14 - len(key))} {value}"
+
+
+def _gap(text: str = "") -> str:
+    """A section header or text line."""
+    return f"item --gap -- {_txt(text)}" if text.strip() else "item --gap --"
+
+
 def menu_script(server_ip: str, ctx: dict, machine=None) -> str:
     """The interactive menu. `machine` is the boot rule (rules.effective) or a machine row; only a
-    'default' rule matters here, 'once'/'always' rules boot without the menu."""
+    'default' rule matters here, 'once'/'always' rules get autoboot_script()."""
     b = base(server_ip)
     platform = ctx.get("platform", "pcbios")
     q = client_query(ctx)
@@ -57,12 +113,9 @@ def menu_script(server_ip: str, ctx: dict, machine=None) -> str:
         default = f"{machine['iso_id']}" + (f"a{machine['answer_id']}" if machine["answer_id"] else "")
 
     rows = [r for r in isos.list_isos() if r["enabled"] and r["status"] == "ready"]
-    ans_by_iso: dict[int, list] = {}
-    for a in answers_mod.list_answers():
-        if a["status"] == "ready":
-            ans_by_iso.setdefault(a["iso_id"], []).append(a)
+    by_id = {r["id"]: r for r in rows}
+    ready_answers = [a for a in answers_mod.list_answers() if a["status"] == "ready" and a["iso_id"] in by_id]
 
-    # Build folder tree: {folder: [entries]}
     tree: dict[str, list] = {}
     for r in rows:
         folder = r["relpath"].rsplit("/", 1)[0] if "/" in r["relpath"] else ""
@@ -71,47 +124,79 @@ def menu_script(server_ip: str, ctx: dict, machine=None) -> str:
     def label(r, a=None) -> str:
         return f"iso{r['id']}" + (f"a{a['id']}" if a else "")
 
-    def items(r) -> list[str]:
-        method = isos.method_of(r)
-        name = _txt(r["name"])
-        suffix = "" if platform_ok(method, platform) else "  (BIOS only)"
-        out = [f"item {label(r)} {name}{suffix}"]
-        for a in ans_by_iso.get(r["id"], []):
-            out.append(f"item {label(r, a)} {name} - {_txt(a['name'])} (unattended)")
-        return out
+    def fw_meta(r) -> str:
+        fw = isos.METHODS.get(isos.method_of(r), {}).get("fw", [])
+        if not platform_ok(isos.method_of(r), platform):
+            return "BIOS only"
+        return "UEFI+BIOS" if len(fw) == 2 else fw[0].upper() if fw else ""
 
-    def targets(r) -> list[str]:
-        out = []
-        url = f"{b}/ipxe/iso/{r['id']}.ipxe?{q}"
-        out.append(f":{label(r)}\nchain --autofree {url} || goto failed\ngoto start")
-        for a in ans_by_iso.get(r["id"], []):
-            out.append(f":{label(r, a)}\nchain --autofree {url}&answer={a['id']} || goto failed\ngoto start")
-        return out
+    def iso_item(r) -> str:
+        return f"item {label(r)} {_row(r['name'], fw_meta(r))}"
 
-    # Top level folders, sorted; nested folders become nested submenus
     folder_names = sorted({f for f in tree if f} | {p for f in tree if f for p in _parents(f)}, key=str.lower)
 
     def children(parent: str) -> list[str]:
         return [f for f in folder_names if (f.rsplit("/", 1)[0] if "/" in f else "") == parent]
 
+    def count(f: str) -> int:
+        return sum(len(v) for k, v in tree.items() if k == f or k.startswith(f + "/"))
+
     def flabel(f: str) -> str:
         return "dir_" + re.sub(r"[^A-Za-z0-9]", "_", f)
 
-    lines = ["#!ipxe", f"set server {b}", "set menu-timeout " + str(timeout * 1000),
-             "iseq ${platform} efi && set fwname UEFI || set fwname Legacy BIOS", "", ":start"]
-    lines.append(f"menu {title}  -  ${{fwname}}  -  ${{netX/ip}}")
+    def folder_item(f: str) -> str:
+        n = count(f)
+        return f"item {flabel(f)} {_row(f.rsplit('/', 1)[-1] + '/', f'{n} image' + ('s' if n != 1 else '') + '  >')}"
+
+    def is_tool(r) -> bool:
+        return isos.os_tag(r) in TOOL_TAGS or isos.method_of(r) == "memdisk"
+
+    lines = ["#!ipxe", f"set server {b}", *theme_lines(b), "set menu-timeout " + str(timeout * 1000),
+             "iseq ${platform} efi && set fwname UEFI || set fwname BIOS", "", ":start"]
+    lines.append(f"menu {title}  //  ${{fwname}}  //  ${{netX/ip}}  //  ${{netX/mac}}")
+
+    if machine is not None:
+        m = machine.get("machine") if isinstance(machine, dict) else machine
+        g = machine.get("group") if isinstance(machine, dict) else None
+        who = []
+        if m is not None and m["name"]:
+            who.append(f"Recognised as {m['name']}")
+        if g is not None:
+            who.append(f"group {g['name']}")
+        if who:
+            lines += [_gap("// THIS MACHINE"), _gap("  " + "  -  ".join(who))]
+
+    if ready_answers:
+        lines.append(_gap("// UNATTENDED INSTALLS"))
+        for a in ready_answers:
+            r = by_id[a["iso_id"]]
+            lines.append(f"item {label(r, a)} {_row(a['name'] + ' - ' + r['name'], 'AUTO')}")
     top = children("")
-    if top:
-        lines.append("item --gap -- Folders")
-        for f in top:
-            lines.append(f"item {flabel(f)} {_txt(f)}/  >")
-    if tree.get(""):
-        lines.append("item --gap -- ISO images")
-        for r in tree[""]:
-            lines += items(r)
-    lines += ["item --gap --", "item local Boot from local disk", "item shell iPXE shell", "item reboot Reboot"]
+    root = tree.get("", [])
+    systems = [r for r in root if not is_tool(r)]
+    tools = [r for r in root if is_tool(r)]
+    if top or systems:
+        lines.append(_gap("// OPERATING SYSTEMS" if systems else "// FOLDERS"))
+        lines += [folder_item(f) for f in top]
+        lines += [iso_item(r) for r in systems]
+    if tools:
+        lines.append(_gap("// TOOLS"))
+        lines += [iso_item(r) for r in tools]
+    lines += [
+        _gap("// SYSTEM"),
+        f"item --key l local {_row('Boot from local disk', 'DEFAULT' if default == 'local' else '')}",
+        f"item info {_row('System info', 'HOST')}",
+        "item shell iPXE shell",
+        "item reboot Reboot",
+    ]
     default_label = "local" if default == "local" else f"iso{default}"
     if timeout > 0:
+        names = {"local": "Boot from local disk"}
+        for r in rows:
+            names[f"iso{r['id']}"] = r["name"]
+        for a in ready_answers:
+            names[f"iso{a['iso_id']}a{a['id']}"] = a["name"]
+        lines += [_gap(), _gap(f"  Auto-boot: {names.get(default_label, 'Boot from local disk')} after {timeout} s")]
         lines.append(f"choose --default {default_label} --timeout ${{menu-timeout}} target && goto ${{target}} || goto local")
     else:
         lines.append(f"choose --default {default_label} target && goto ${{target}} || goto local")
@@ -121,24 +206,49 @@ def menu_script(server_ip: str, ctx: dict, machine=None) -> str:
         parent = f.rsplit("/", 1)[0] if "/" in f else ""
         back = flabel(parent) if parent else "start"
         lines.append(f":{flabel(f)}")
-        lines.append(f"menu {title}  /  {_txt(f)}")
-        for c in children(f):
-            lines.append(f"item {flabel(c)} {_txt(c.rsplit('/', 1)[-1])}/  >")
-        for r in tree.get(f, []):
-            lines += items(r)
-        lines += ["item --gap --", f"item {back} < Back"]
-        here = {f"iso{r['id']}" for r in tree.get(f, [])}
+        lines.append(f"menu {title}  //  {_txt(f)}/")
+        subs, here_rows = children(f), tree.get(f, [])
+        if subs:
+            lines.append(_gap("// FOLDERS"))
+            lines += [folder_item(c) for c in subs]
+        if here_rows:
+            lines.append(_gap("// IMAGES"))
+            lines += [iso_item(r) for r in here_rows]
+        lines += [_gap(), f"item --key b {back} {_row('< Back', 'ESC')}"]
+        here = {f"iso{r['id']}" for r in here_rows}
         dflt = f"--default {default_label} " if default_label.split("a")[0] in here else ""
         lines.append(f"choose {dflt}target && goto ${{target}} || goto {back}")
         lines.append("")
 
     for r in rows:
-        lines += targets(r)
+        url = f"{b}/ipxe/iso/{r['id']}.ipxe?{q}"
+        lines.append(f":{label(r)}\nchain --autofree {url} || goto failed\ngoto start")
+    for a in ready_answers:
+        r = by_id[a["iso_id"]]
+        url = f"{b}/ipxe/iso/{r['id']}.ipxe?{q}&answer={a['id']}"
+        lines.append(f":{label(r, a)}\nchain --autofree {url} || goto failed\ngoto start")
     lines += [
         "",
         ":local",
         "echo Booting from local disk ...",
         "exit 0",
+        ":info",
+        "menu System info",
+        "item --gap -- // HARDWARE",
+        _kv("Manufacturer", "${manufacturer}"),
+        _kv("Product", "${product}"),
+        _kv("Serial", "${serial}"),
+        _kv("Firmware", "${fwname} ${buildarch}"),
+        "item --gap --",
+        "item --gap -- // NETWORK",
+        _kv("MAC", "${netX/mac}"),
+        _kv("IP", "${netX/ip} / ${netX/netmask}"),
+        _kv("Gateway", "${netX/gateway}"),
+        _kv("Boot server", "${server}"),
+        "item --gap --",
+        "item --key b start < Back",
+        "choose target || goto start",
+        "goto start",
         ":shell",
         "echo Type 'exit' to return to the menu",
         "shell",
@@ -148,6 +258,58 @@ def menu_script(server_ip: str, ctx: dict, machine=None) -> str:
         ":failed",
         "echo Boot failed: ${errno}",
         "prompt --timeout 15000 Press any key to return to the menu ... ||",
+        "goto start",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+AUTO_COUNTDOWN = 5
+
+
+def autoboot_script(server_ip: str, ctx: dict, rule: dict, row, answer=None) -> str:
+    """A machine with a once/always rule: show what is about to happen for a few seconds, then boot.
+    Any key stops the countdown; the full menu stays one choice away."""
+    b = base(server_ip)
+    q = client_query(ctx)
+    m, g = rule.get("machine"), rule.get("group")
+    who = []
+    if m is not None and m["name"]:
+        who.append(f"Recognised as {m['name']}")
+    if g is not None:
+        who.append(f"group {g['name']}")
+    mode = {"once": "next boot once", "always": "every boot"}.get(rule["mode"], rule["mode"])
+    target = _txt(row["name"] + (f" - {answer['name']}" if answer is not None else ""))
+    aq = f"&answer={answer['id']}" if answer is not None else ""
+    lines = ["#!ipxe", f"set server {b}", *theme_lines(b),
+             "iseq ${platform} efi && set fwname UEFI || set fwname BIOS", ":start",
+             f"menu {_txt(db.get_setting('menu_title') or db.get_setting('server_name') or 'PXE Boot Server')}"
+             "  //  ${fwname}  //  ${netX/ip}  //  ${netX/mac}",
+             _gap("// THIS MACHINE")]
+    if who:
+        lines.append(_gap("  " + "  -  ".join(who)))
+    lines += [_gap(f"  Rule: {mode}" + (" (group)" if rule["source"] == "group" else "")), _gap(),
+              f"item auto {_row(target, 'NEXT BOOT' if rule['mode'] == 'once' else 'EVERY BOOT')}",
+              f"item --key l local {_row('Boot from local disk')}",
+              f"item --key m full {_row('Show the full menu', '>')}"]
+    if answer is not None:
+        lines += [_gap(), _gap("// INSTALL PLAN"), _gap("  Unattended install: " + _txt(answer["name"])),
+                  _gap("  The disk of this machine will be wiped.")]
+    lines += [_gap(), _gap(f"  Starts automatically in {AUTO_COUNTDOWN} s. Use the arrow keys to stop.")]
+    lines += [
+        f"choose --default auto --timeout {AUTO_COUNTDOWN * 1000} target && goto ${{target}} || goto local",
+        ":auto",
+        f"chain --autofree {b}/ipxe/iso/{row['id']}.ipxe?{q}{aq}&auto=1 || goto failed",
+        "goto start",
+        ":full",
+        f"chain --autofree {b}/ipxe/menu.ipxe?{q}&manual=1 || goto failed",
+        "goto start",
+        ":local",
+        "echo Booting from local disk ...",
+        "exit 0",
+        ":failed",
+        "echo Boot failed: ${errno}",
+        "prompt --timeout 15000 Press any key to return ... ||",
         "goto start",
         "",
     ]

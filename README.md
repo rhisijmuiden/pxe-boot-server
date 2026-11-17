@@ -10,13 +10,15 @@ A network boot server for Debian 13 that works like Ventoy over the network. Upl
 - **Linux**: Ubuntu, Debian (installer and live), Rocky/Alma/RHEL/Fedora, Arch and **Proxmox VE/PBS/PMG**, booted with the right kernel options over HTTP.
 - **Any other ISO** (tools, firmware updaters, rescue disks) through iPXE `sanboot`, or `memdisk` for Legacy BIOS.
 
+![Boot menu](docs/boot-menu.png)
+
 ## Features
 
 | | |
 |---|---|
 | ISO library | Resumable uploads of large ISOs (chunked, survive a dropped connection), folders become submenus, automatic detection of the boot method. |
 | ISO catalog | One-click downloads of Ubuntu, Debian, Rocky, Proxmox VE/PBS, TrueNAS, Clonezilla and Memtest86+, always the newest release, verified against the vendor's checksum. Or download any ISO from a URL. Downloads resume after a restart. |
-| Boot menu | Generated from the library. Default entry, timeout, title, and a live preview of the iPXE menu. |
+| Boot menu | Generated from the library, in the RHIS style: a graphical full screen menu on UEFI (text with RHIS colours on legacy BIOS), sections for unattended installs, operating systems, tools and system info. Machines with a rule get a short auto-boot screen with a 5 second countdown. Default entry, timeout, title, and a live preview in the web interface. |
 | Live clients | Which client is booting what, firmware type, progress and transfer speed. |
 | Statistics | Bandwidth over time, data served per day, running tasks, top ISOs. |
 | Answer files | Six-step wizard for unattended installs: Windows `autounattend.xml` (edition, key, local admin, disk, Win11 checks), Ubuntu autoinstall, Debian preseed, Kickstart and Proxmox `answer.toml`. |

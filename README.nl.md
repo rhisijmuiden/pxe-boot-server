@@ -10,13 +10,15 @@ Een netwerkbootserver voor Debian 13 die werkt als Ventoy via het netwerk. Uploa
 - **Linux**: Ubuntu, Debian (installer en live), Rocky/Alma/RHEL/Fedora, Arch en **Proxmox VE/PBS/PMG**, gestart met de juiste kernelopties via HTTP.
 - **Elke andere ISO** (tools, firmware-updates, rescue-schijven) via iPXE `sanboot`, of `memdisk` voor Legacy BIOS.
 
+![Bootmenu](docs/boot-menu.png)
+
 ## Functies
 
 | | |
 |---|---|
 | ISO-bibliotheek | Hervatbare uploads van grote ISO's (in delen, overleven een verbroken verbinding), mappen worden submenu's, de bootmethode wordt automatisch herkend. |
 | ISO-catalogus | Met één klik Ubuntu, Debian, Rocky, Proxmox VE/PBS, TrueNAS, Clonezilla en Memtest86+ downloaden, altijd de nieuwste versie, gecontroleerd met de checksum van de leverancier. Of een willekeurige ISO via een URL. Downloads gaan verder na een herstart. |
-| Bootmenu | Gemaakt uit de bibliotheek. Standaardkeuze, wachttijd, titel en een live voorbeeld van het iPXE-menu. |
+| Bootmenu | Gemaakt uit de bibliotheek, in RHIS-stijl: een grafisch schermvullend menu op UEFI (tekst in RHIS-kleuren op legacy BIOS), met secties voor onbeheerde installaties, besturingssystemen, tools en systeeminfo. Machines met een regel krijgen een kort auto-bootscherm met 5 seconden aftellen. Standaardkeuze, wachttijd, titel en een live voorbeeld in de webinterface. |
 | Live clients | Welke client wat aan het booten is, firmwaretype, voortgang en snelheid. |
 | Statistieken | Bandbreedte in de tijd, verstuurde data per dag, lopende taken, populairste ISO's. |
 | Antwoordbestanden | Wizard in zes stappen voor installaties zonder vragen: Windows `autounattend.xml` (editie, productcode, lokale beheerder, schijf, Win11-controles), Ubuntu autoinstall, Debian preseed, Kickstart en Proxmox `answer.toml`. |

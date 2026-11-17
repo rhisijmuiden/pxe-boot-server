@@ -182,12 +182,11 @@ def ipxe_menu(request: Request):
     if machine is not None:
         db.run("UPDATE machines SET last_seen=? WHERE id=?", time.time(), machine["id"])
     rule = rules.effective(ctx["mac"], machine)
-    if rules.auto_boot(rule):
+    if rules.auto_boot(rule) and request.query_params.get("manual") != "1":
         row = isos.get(rule["iso_id"])
         if row is not None and row["status"] == "ready":
-            rules.mark_used(ctx["mac"], rule)
             ans = answers.get(rule["answer_id"]) if rule["answer_id"] else None
-            return ipxe_response(_boot(request, row, ctx, ans, auto=True))
+            return ipxe_response(ipxe.autoboot_script(host_ip(request), ctx, rule, row, ans))
     db.log_event("menu", mac=ctx["mac"], ip=ip, platform=platform_name, hostname=ctx["hostname"])
     return ipxe_response(ipxe.menu_script(host_ip(request), ctx, rule))
 
@@ -213,14 +212,20 @@ def _boot(request: Request, row, ctx: dict, ans, auto: bool = False) -> str:
 
 
 @app.get("/ipxe/iso/{iso_id}.ipxe")
-def ipxe_iso(request: Request, iso_id: int, answer: int | None = None):
+def ipxe_iso(request: Request, iso_id: int, answer: int | None = None, auto: int = 0):
     ctx = ctx_from(request)
     row = isos.get(iso_id)
     if row is None or row["status"] != "ready":
         return ipxe_response(ipxe.error_script("This ISO is not available.", ipxe.base(host_ip(request)),
                                                ipxe.client_query(ctx)))
     ans = answers.get(answer) if answer else None
-    return ipxe_response(_boot(request, row, ctx, ans))
+    if auto:
+        # Chosen (or timed out) on the automatic boot screen: a "once" rule is used up now.
+        rule = rules.effective(ctx["mac"])
+        auto = bool(rules.auto_boot(rule) and rule["iso_id"] == iso_id)
+        if auto:
+            rules.mark_used(ctx["mac"], rule)
+    return ipxe_response(_boot(request, row, ctx, ans, auto=bool(auto)))
 
 
 @app.get("/ipxe/winpe/{iso_id}/{name}")
