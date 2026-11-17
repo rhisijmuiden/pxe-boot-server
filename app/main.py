@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import answers, auth, catalog, config, db, dnsmasq, i18n, ipxe, isos, live, mailer, system, uploads, windows
+from . import answers, auth, catalog, config, db, dnsmasq, i18n, ipxe, isos, live, mailer, rules, system, uploads, windows
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("pxe")
@@ -181,15 +181,15 @@ def ipxe_menu(request: Request):
                hostname=(machine["name"] if machine and machine["name"] else ctx["hostname"]))
     if machine is not None:
         db.run("UPDATE machines SET last_seen=? WHERE id=?", time.time(), machine["id"])
-        if machine["iso_id"] and (machine["mode"] == "always" or (machine["mode"] == "once" and not machine["used"])):
-            row = isos.get(machine["iso_id"])
-            if row is not None and row["status"] == "ready":
-                if machine["mode"] == "once":
-                    db.run("UPDATE machines SET used=1 WHERE id=?", machine["id"])
-                ans = answers.get(machine["answer_id"]) if machine["answer_id"] else None
-                return ipxe_response(_boot(request, row, ctx, ans, auto=True))
+    rule = rules.effective(ctx["mac"], machine)
+    if rules.auto_boot(rule):
+        row = isos.get(rule["iso_id"])
+        if row is not None and row["status"] == "ready":
+            rules.mark_used(ctx["mac"], rule)
+            ans = answers.get(rule["answer_id"]) if rule["answer_id"] else None
+            return ipxe_response(_boot(request, row, ctx, ans, auto=True))
     db.log_event("menu", mac=ctx["mac"], ip=ip, platform=platform_name, hostname=ctx["hostname"])
-    return ipxe_response(ipxe.menu_script(host_ip(request), ctx, machine))
+    return ipxe_response(ipxe.menu_script(host_ip(request), ctx, rule))
 
 
 def _boot(request: Request, row, ctx: dict, ans, auto: bool = False) -> str:
@@ -854,19 +854,22 @@ def api_answer_delete(request: Request, aid: int):
 @app.get("/machines")
 def machines_page(request: Request):
     auth.require_user(request)
-    rows = db.q("SELECT machines.*, isos.name AS iso_name, answers.name AS answer_name FROM machines "
+    rows = db.q("SELECT machines.*, isos.name AS iso_name, answers.name AS answer_name, g.name AS group_name, "
+                "gi.name AS group_iso_name, g.mode AS group_mode FROM machines "
                 "LEFT JOIN isos ON isos.id=machines.iso_id LEFT JOIN answers ON answers.id=machines.answer_id "
-                "ORDER BY machines.name COLLATE NOCASE")
+                "LEFT JOIN machine_groups g ON g.id=machines.group_id LEFT JOIN isos gi ON gi.id=g.iso_id "
+                "ORDER BY machines.name COLLATE NOCASE, machines.mac")
     recent = db.q("SELECT mac, ip, platform, MAX(ts) AS ts FROM boot_events WHERE mac<>'' GROUP BY mac ORDER BY ts DESC "
                   "LIMIT 20")
-    edit = None
-    if request.query_params.get("edit"):
-        edit = db.q1("SELECT * FROM machines WHERE id=?", int(request.query_params["edit"]))
+    qp = request.query_params
+    edit = db.q1("SELECT * FROM machines WHERE id=?", int(qp["edit"])) if qp.get("edit", "").isdigit() else None
+    gedit = rules.get_group(int(qp["gedit"])) if qp.get("gedit", "").isdigit() else None
     return render(request, "machines.html", {
-        "nav": "machines", "rows": rows, "recent": recent, "edit": edit,
+        "nav": "machines", "rows": rows, "recent": recent, "edit": edit, "gedit": gedit, "groups": rules.list_groups(),
         "isos": [r for r in isos.list_isos() if r["status"] == "ready"],
-        "answers": answers.list_answers(), "prefill_mac": request.query_params.get("mac", ""),
-        "open_form": bool(edit or request.query_params.get("new") or request.query_params.get("mac")),
+        "answers": answers.list_answers(), "prefill_mac": qp.get("mac", ""),
+        "open_form": bool(edit or qp.get("new") or qp.get("mac")),
+        "open_group": bool(gedit or qp.get("gnew")),
     })
 
 
@@ -884,18 +887,70 @@ async def machine_save(request: Request):
         a = answers.get(answer_id)
         if a is None or a["iso_id"] != iso_id:
             answer_id = None
-    mode = form.get("mode") if form.get("mode") in ("once", "always", "default") else "once"
+    mode = form.get("mode") if form.get("mode") in rules.MODES else "once"
     mid = int(form.get("id") or 0)
     name = form.get("name", "").strip()[:64]
+    group_id = int(form.get("group_id") or 0) or None
+    if group_id and rules.get_group(group_id) is None:
+        group_id = None
     if mid:
-        db.run("UPDATE machines SET mac=?, name=?, iso_id=?, answer_id=?, mode=?, used=0 WHERE id=?",
-               mac, name, iso_id, answer_id, mode, mid)
+        db.run("UPDATE machines SET mac=?, name=?, iso_id=?, answer_id=?, mode=?, used=0, group_id=? WHERE id=?",
+               mac, name, iso_id, answer_id, mode, group_id, mid)
     else:
-        db.run("INSERT INTO machines(mac,name,iso_id,answer_id,mode,created) VALUES(?,?,?,?,?,?) "
+        db.run("INSERT INTO machines(mac,name,iso_id,answer_id,mode,created,group_id) VALUES(?,?,?,?,?,?,?) "
                "ON CONFLICT(mac) DO UPDATE SET name=excluded.name, iso_id=excluded.iso_id, answer_id=excluded.answer_id, "
-               "mode=excluded.mode, used=0", mac, name, iso_id, answer_id, mode, time.time())
+               "mode=excluded.mode, used=0, group_id=excluded.group_id", mac, name, iso_id, answer_id, mode, time.time(),
+               group_id)
     flash(request, "machine_saved")
     return RedirectResponse("/machines", status_code=303)
+
+
+@app.post("/machines/groups/save")
+async def group_save(request: Request):
+    auth.require_user(request)
+    form = await form_csrf(request)
+    gid = int(form.get("id") or 0)
+    name = form.get("name", "").strip()[:64]
+    try:
+        prefixes = rules.normalize_prefixes(form.get("prefixes", ""))
+    except ValueError:
+        flash(request, "err_prefix", "error")
+        return RedirectResponse(f"/machines?gedit={gid}" if gid else "/machines?gnew=1", status_code=303)
+    if not name:
+        flash(request, "err_group_name", "error")
+        return RedirectResponse(f"/machines?gedit={gid}" if gid else "/machines?gnew=1", status_code=303)
+    iso_id = int(form.get("iso_id") or 0) or None
+    answer_id = int(form.get("answer_id") or 0) or None
+    if answer_id:
+        a = answers.get(answer_id)
+        if a is None or a["iso_id"] != iso_id:
+            answer_id = None
+    mode = form.get("mode") if form.get("mode") in rules.MODES else "default"
+    if gid:
+        db.run("UPDATE machine_groups SET name=?, prefixes=?, iso_id=?, answer_id=?, mode=? WHERE id=?",
+               name, prefixes, iso_id, answer_id, mode, gid)
+        rules.rearm_group(gid)
+    else:
+        db.run("INSERT INTO machine_groups(name,prefixes,iso_id,answer_id,mode,created) VALUES(?,?,?,?,?,?)",
+               name, prefixes, iso_id, answer_id, mode, time.time())
+    flash(request, "group_saved")
+    return RedirectResponse("/machines", status_code=303)
+
+
+@app.post("/api/groups/{gid}/rearm")
+def api_group_rearm(request: Request, gid: int):
+    auth.require_user(request)
+    api_csrf(request)
+    rules.rearm_group(gid)
+    return {"ok": True}
+
+
+@app.delete("/api/groups/{gid}")
+def api_group_delete(request: Request, gid: int):
+    auth.require_user(request)
+    api_csrf(request)
+    db.run("DELETE FROM machine_groups WHERE id=?", gid)
+    return {"ok": True}
 
 
 @app.post("/api/machines/{mid}/rearm")

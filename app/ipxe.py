@@ -45,7 +45,8 @@ def platform_ok(method: str, platform: str) -> bool:
 
 
 def menu_script(server_ip: str, ctx: dict, machine=None) -> str:
-    """The interactive menu. A linked machine in 'once'/'always' mode never gets here."""
+    """The interactive menu. `machine` is the boot rule (rules.effective) or a machine row; only a
+    'default' rule matters here, 'once'/'always' rules boot without the menu."""
     b = base(server_ip)
     platform = ctx.get("platform", "pcbios")
     q = client_query(ctx)
