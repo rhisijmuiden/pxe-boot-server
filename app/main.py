@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import answers, auth, catalog, config, db, dnsmasq, i18n, ipxe, isos, live, mailer, rules, system, uploads, windows
+from . import answers, auth, catalog, config, db, dnsmasq, i18n, ipxe, isos, live, logs, mailer, rules, system, uploads, windows
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("pxe")
@@ -977,7 +977,7 @@ def network_page(request: Request):
     return render(request, "network.html", {
         "nav": "network", "itfs": system.interfaces(), "selected": db.get_setting("interfaces") or [],
         "s": {k: db.get_setting(k) for k in ("server_ip", "dhcp_mode", "dhcp_range_start", "dhcp_range_end",
-                                             "dhcp_gateway", "dhcp_dns", "dhcp_lease", "uefi_loader")},
+                                             "dhcp_gateway", "dhcp_dns", "dhcp_lease", "uefi_loader", "log_dhcp")},
         "auto_ip": system.server_ip(), "welcome": request.query_params.get("welcome"),
         "conf": dnsmasq.render(),
     })
@@ -999,6 +999,7 @@ async def network_save(request: Request):
     for k in ("dhcp_range_start", "dhcp_range_end", "dhcp_gateway", "dhcp_dns", "dhcp_lease"):
         db.set_setting(k, str(form.get(k, "")).strip())
     db.set_setting("uefi_loader", "ipxe.efi" if form.get("uefi_loader") == "ipxe.efi" else "snponly.efi")
+    db.set_setting("log_dhcp", bool(form.get("log_dhcp")))
     err = dnsmasq.validate_full_range()
     if err:
         flash(request, err, "error")
@@ -1060,6 +1061,24 @@ def bootlog_page(request: Request):
     rows = db.q("SELECT * FROM boot_events ORDER BY ts DESC LIMIT 100 OFFSET ?", (page - 1) * 100)
     known = {r["mac"] for r in db.q("SELECT mac FROM machines")}
     return render(request, "bootlog.html", {"nav": "bootlog", "rows": rows, "page": page, "known": known})
+
+
+@app.get("/logs")
+def logs_page(request: Request):
+    auth.require_user(request)
+    return render(request, "logs.html", {"nav": "logs"})
+
+
+@app.get("/api/logs")
+def api_logs(request: Request, kind: str = "http", q: str = "", all: int = 0):  # noqa: A002
+    auth.require_user(request)
+    q = q.strip()[:100]
+    if kind == "http":
+        return {"kind": kind, "lines": logs.http(300, q, bool(all)), "error": ""}
+    if kind not in ("tftp", "dhcp"):
+        raise HTTPException(400)
+    lines, err = logs.dnsmasq(kind, 300, q)
+    return {"kind": kind, "lines": lines, "error": err, "log_dhcp": bool(db.get_setting("log_dhcp"))}
 
 
 # ---------------------------------------------------------------- users

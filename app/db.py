@@ -181,6 +181,7 @@ DEFAULTS: dict[str, Any] = {
     "dhcp_dns": "",
     "dhcp_lease": "12h",
     "uefi_loader": "snponly.efi",  # snponly.efi (firmware drivers, keyboard keeps working) | ipxe.efi
+    "log_dhcp": False,         # dnsmasq log-dhcp: every DHCP/PXE exchange in the journal (Logs page)
     "menu_timeout": 30,
     "menu_default": "local",   # "local" or iso id
     "menu_title": "",

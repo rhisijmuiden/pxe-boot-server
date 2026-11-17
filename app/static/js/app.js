@@ -632,6 +632,58 @@
     poll();
   };
 
+  Page.logs = function () {
+    const tabs = $$("#logTabs button"), head = $("#logHead"), body = $("#logBody"), q = $("#logQ"), all = $("#logAll");
+    const pauseBtn = $("#logPause"), errBox = $("#logErr"), allWrap = $("#allWrap");
+    let kind = "http", paused = false, timer = null, seq = 0;
+    try { const k = sessionStorage.getItem("logKind"); if (k) kind = k; } catch (e) { /* ignore */ }
+    const fmtTs = (ts) => { const d = new Date(ts * 1000); return d.toLocaleDateString([], {day: "2-digit", month: "2-digit"}) + " " + d.toTimeString().slice(0, 8); };
+    const statusPill = (s) => `<span class="pill ${s < 300 ? "ok" : s < 400 ? "" : s < 500 ? "warn" : "off"}">${s}</span>`;
+    const heads = {
+      http: [t("js_log_time"), t("js_log_client"), t("js_log_status"), t("js_log_size"), t("js_log_path")],
+      tftp: [t("js_log_time"), t("js_log_client"), t("js_log_file"), t("js_log_message")],
+      dhcp: [t("js_log_time"), t("js_log_client"), "MAC", t("js_log_message")],
+    };
+    const rows = {
+      http: (e) => `<td class="num">${fmtTs(e.ts)}</td><td class="num">${esc(e.ip)}</td><td>${statusPill(e.status)}</td><td class="num">${fmtBytes(e.bytes)}</td><td class="num" style="word-break:break-all">${esc(e.path)}</td>`,
+      tftp: (e) => `<td class="num">${fmtTs(e.ts)}</td><td class="num">${esc(e.ip || "–")}</td><td>${e.file ? `<span class="pill ${e.ok ? "ok" : "off"}">${esc(e.file)}</span>` : "–"}</td><td class="small">${esc(e.message)}</td>`,
+      dhcp: (e) => `<td class="num">${fmtTs(e.ts)}</td><td class="num">${esc(e.ip || "–")}</td><td class="num">${esc(e.mac || "–")}</td><td class="small">${esc(e.message)}</td>`,
+    };
+    function show() {
+      tabs.forEach((b) => { const on = b.dataset.kind === kind; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
+      allWrap.hidden = kind !== "http";
+      head.innerHTML = "<tr>" + heads[kind].map((h) => `<th>${esc(h)}</th>`).join("") + "</tr>";
+    }
+    async function load() {
+      clearTimeout(timer);
+      const my = ++seq;
+      try {
+        const r = await api("GET", `/api/logs?kind=${kind}&q=${encodeURIComponent(q.value)}&all=${all.checked ? 1 : 0}`);
+        if (my !== seq) return;
+        body.innerHTML = r.lines.length ? r.lines.map((e) => "<tr>" + rows[kind](e) + "</tr>").join("")
+          : `<tr><td class="note" colspan="5">${esc(t("js_log_empty"))}</td></tr>`;
+        const notes = [];
+        if (r.error) notes.push(t("js_log_error") + ": " + r.error);
+        if (kind === "dhcp" && !r.log_dhcp) notes.push(t("js_log_dhcp_off"));
+        errBox.hidden = !notes.length; errBox.textContent = notes.join(" ");
+      } catch (e) { /* retry */ }
+      if (!paused) timer = setTimeout(load, 3000);
+    }
+    tabs.forEach((b) => b.addEventListener("click", () => {
+      kind = b.dataset.kind; try { sessionStorage.setItem("logKind", kind); } catch (e) { /* ignore */ }
+      show(); body.innerHTML = `<tr><td class="note">…</td></tr>`; load();
+    }));
+    let qt; q.addEventListener("input", () => { clearTimeout(qt); qt = setTimeout(load, 300); });
+    all.addEventListener("change", load);
+    pauseBtn.addEventListener("click", () => {
+      paused = !paused;
+      pauseBtn.setAttribute("aria-pressed", paused);
+      $("span", pauseBtn).textContent = paused ? t("js_log_paused") : t("js_log_live");
+      if (!paused) load(); else clearTimeout(timer);
+    });
+    show(); load();
+  };
+
   Page.menu = function () {
     const box = $("#menuPreview"), raw = $("#menuScript");
     async function load(fw) {
