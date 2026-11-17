@@ -248,7 +248,15 @@ def boot_script(server_ip: str, row, ctx: dict, answer=None) -> str:
         return "\n".join(head + body + fail)
     else:  # sanboot
         return "\n".join(head + [f"sanboot --no-describe {iso_url(b, row)} || goto failed"] + fail[1:])
+    shim = isos.ci_find(isos.mount_dir(row["id"]), "efi/boot/bootx64.efi") if method in SHIM_METHODS else None
+    if shim:
+        # Secure Boot: let the distribution's own Microsoft-signed shim verify its kernel. The shim
+        # command does nothing without Secure Boot, and `||` keeps builds without it working.
+        body.append(f"iseq ${{platform}} efi && shim {m(shim)} ||")
     return "\n".join(head + body + fail)
+
+
+SHIM_METHODS = ("ubuntu", "debian_live", "rhel", "fedora_live", "proxmox")
 
 
 def winpe_files(server_ip: str, row, ctx: dict, answer=None) -> dict[str, str]:

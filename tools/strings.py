@@ -330,6 +330,11 @@ S = {
 "js_pve_bad_name": ("Use letters, numbers and dashes in the VM name.", "Gebruik letters, cijfers en streepjes in de VM-naam."),
 "js_pve_bad_fw": ("This ISO only boots with Legacy BIOS.", "Deze ISO start alleen met Legacy BIOS."),
 "js_pve_bad_iso": ("Choose an ISO that is ready.", "Kies een ISO die klaar is."),
+# Secure Boot
+"sb_on": ("UEFI Secure Boot (signed shim and iPXE)", "UEFI Secure Boot (ondertekende shim en iPXE)"),
+"sb_ready": ("signed loaders present", "ondertekende loaders aanwezig"),
+"sb_missing": ("signed loaders not downloaded yet, run an update", "ondertekende loaders nog niet gedownload, voer een update uit"),
+"sb_hint": ("UEFI clients get the Microsoft-signed shim and the official signed iPXE, so they boot with Secure Boot switched on. Also works with Secure Boot off. Windows (wimboot) and Linux installers with a signed shim (Ubuntu, Debian, RHEL family, Fedora, Proxmox) boot; unsigned ISOs only boot with Secure Boot off.", "UEFI-clients krijgen de door Microsoft ondertekende shim en de officiële ondertekende iPXE, zodat ze opstarten met Secure Boot aan. Werkt ook met Secure Boot uit. Windows (wimboot) en Linux-installers met een ondertekende shim (Ubuntu, Debian, RHEL-familie, Fedora, Proxmox) starten; niet-ondertekende ISO's alleen met Secure Boot uit."),
 }
 
 if __name__ == "__main__":

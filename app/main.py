@@ -1103,7 +1103,9 @@ def network_page(request: Request):
     return render(request, "network.html", {
         "nav": "network", "itfs": system.interfaces(), "selected": db.get_setting("interfaces") or [],
         "s": {k: db.get_setting(k) for k in ("server_ip", "dhcp_mode", "dhcp_range_start", "dhcp_range_end",
-                                             "dhcp_gateway", "dhcp_dns", "dhcp_lease", "uefi_loader", "log_dhcp")},
+                                             "dhcp_gateway", "dhcp_dns", "dhcp_lease", "uefi_loader", "log_dhcp",
+                                             "secure_boot")},
+        "sb_ready": dnsmasq.secure_boot_ready(),
         "auto_ip": system.server_ip(), "welcome": request.query_params.get("welcome"),
         "conf": dnsmasq.render(),
     })
@@ -1126,6 +1128,7 @@ async def network_save(request: Request):
         db.set_setting(k, str(form.get(k, "")).strip())
     db.set_setting("uefi_loader", "ipxe.efi" if form.get("uefi_loader") == "ipxe.efi" else "snponly.efi")
     db.set_setting("log_dhcp", bool(form.get("log_dhcp")))
+    db.set_setting("secure_boot", bool(form.get("secure_boot")))
     err = dnsmasq.validate_full_range()
     if err:
         flash(request, err, "error")

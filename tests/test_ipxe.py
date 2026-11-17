@@ -83,3 +83,25 @@ def test_samba_share_allows_running_setup():
     from pathlib import Path
     conf = (Path(__file__).resolve().parent.parent / "deploy" / "smb-share.conf").read_text()
     assert "acl allow execute always = yes" in conf
+
+
+def test_secure_boot_uses_signed_shim():
+    from app import db, dnsmasq
+    db.set_setting("secure_boot", True)
+    try:
+        conf = dnsmasq.render()
+        assert "sb/snponly-shim.efi" in conf
+        db.set_setting("uefi_loader", "ipxe.efi")
+        assert dnsmasq.uefi_boot_file() == "sb/ipxe-shim.efi"
+    finally:
+        db.set_setting("secure_boot", False)
+        db.set_setting("uefi_loader", "snponly.efi")
+    assert dnsmasq.uefi_boot_file() == "snponly.efi"
+
+
+def test_linux_boot_adds_distribution_shim(iso_row):
+    from app import ipxe
+    row = iso_row({"casper/vmlinuz": "k", "casper/initrd": "i", "EFI/BOOT/BOOTx64.EFI": "s"})
+    text = ipxe.boot_script("10.0.0.5", row, {"platform": "efi", "mac": ""})
+    assert f"iseq ${{platform}} efi && shim http://10.0.0.5/mnt/{row['id']}/EFI/BOOT/BOOTx64.EFI ||" in text
+    assert text.index("shim ") < text.index("boot ||")

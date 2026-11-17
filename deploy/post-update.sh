@@ -38,6 +38,24 @@ for f in undionly.kpxe ipxe.efi snponly.efi; do
   install -m 644 "$REPO/ipxe/bin/$f" "$SRV/tftp/$f.0"
 done
 
+step "Secure Boot loaders (signed shim + iPXE)"
+# Official signed iPXE builds: Microsoft-signed shim -> iPXE signed by the iPXE project. They cannot
+# carry our embedded script, so the same script is served as autoexec.ipxe next to them.
+SB="$SRV/tftp/sb"
+install -d -m 755 "$SB"
+if [ ! -s "$SB/snponly-shim.efi" ] || [ -n "$(find "$SB/snponly-shim.efi" -mtime +30 2>/dev/null)" ] || [ "${PXE_REFRESH_SB:-0}" = 1 ]; then
+  TMP="$(mktemp -d)"
+  if curl -fsSL --retry 3 -o "$TMP/ipxeboot.tar.gz" https://github.com/ipxe/ipxe/releases/latest/download/ipxeboot.tar.gz \
+     && tar -xzf "$TMP/ipxeboot.tar.gz" -C "$TMP" \
+     && SBSRC="$(find "$TMP" -type d -name x86_64-sb | head -n1)" && [ -n "$SBSRC" ] && [ -s "$SBSRC/snponly-shim.efi" ]; then
+    for f in "$SBSRC"/*.efi; do install -m 644 "$f" "$SB/$(basename "$f")"; done
+  else
+    echo "warning: could not download the signed iPXE loaders; Secure Boot clients cannot boot until the next update" >&2
+  fi
+  rm -rf "$TMP"
+fi
+install -m 644 "$REPO/ipxe/embed.ipxe" "$SB/autoexec.ipxe"
+
 step "wimboot and memdisk"
 if [ ! -s "$SRV/boot/wimboot" ] || [ "${PXE_REFRESH_WIMBOOT:-0}" = 1 ]; then
   if curl -fsSL --retry 3 -o "$SRV/boot/wimboot.tmp" https://github.com/ipxe/wimboot/releases/latest/download/wimboot; then

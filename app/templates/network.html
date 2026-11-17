@@ -18,6 +18,9 @@
       <div class="field"><label for="uefi_loader">{{ t('uefi_bin') }}</label><select class="input" id="uefi_loader" name="uefi_loader">
         <option value="snponly.efi" {{ 'selected' if s.uefi_loader != 'ipxe.efi' }}>snponly.efi · {{ t('uefi_snp') }}</option>
         <option value="ipxe.efi" {{ 'selected' if s.uefi_loader == 'ipxe.efi' }}>ipxe.efi · {{ t('uefi_ipxe') }}</option></select></div>
+      <div class="field full"><label class="check-row"><input type="checkbox" name="secure_boot" value="1" {{ 'checked' if s.secure_boot }}> {{ t('sb_on') }}
+        {% if sb_ready %}<span class="pill ok">{{ t('sb_ready') }}</span>{% else %}<span class="pill warn">{{ t('sb_missing') }}</span>{% endif %}</label>
+        <span class="hint">{{ t('sb_hint') }}</span></div>
       <div class="field full"><label class="check-row"><input type="checkbox" name="log_dhcp" value="1" {{ 'checked' if s.log_dhcp }}> {{ t('log_dhcp') }}</label><span class="hint">{{ t('log_dhcp_hint') }}</span></div>
     </div>
     <div class="field"><label>{{ t('mode') }}</label><div class="radios">
