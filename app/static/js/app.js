@@ -521,6 +521,117 @@
     }));
   };
 
+  Page.catalog = function () {
+    const panel = $("#dlPanel"), list = $("#dlList");
+    const folderOpts = $("#folderOpts").innerHTML;
+    const errText = (e) => e.message === "exists" ? t("js_up_exists") : e.message === "name" ? t("js_cat_bad_name")
+      : e.message === "url" ? t("js_cat_bad_url") : e.message === "checksum" ? t("js_cat_bad_sum") : e.message;
+
+    function dlRow(d) {
+      const pc = d.size ? (d.received / d.size) * 100 : 0;
+      let status;
+      if (d.status === "done") status = `<span class="pill ok">${esc(t("js_cat_done"))}</span>`;
+      else if (d.status === "error") status = `<span class="status-err">${esc(d.error === "checksum mismatch" ? t("js_cat_mismatch") : d.error)}</span>`;
+      else if (d.status === "cancelled") status = esc(t("js_cat_cancelled"));
+      else if (d.status === "queued") status = esc(t("js_up_waiting"));
+      else if (d.status === "verifying") status = esc(t("js_cat_verifying"));
+      else status = `${fmtBytes(d.received)}${d.size ? " / " + fmtBytes(d.size) + " · " + pc.toFixed(0) + "%" : ""}${d.speed ? " · " + fmtBytes(d.speed) + "/s" : ""}`;
+      const verified = d.status === "done" ? (d.expected ? " · " + t("js_cat_verified") : " · " + t("js_cat_unverified")) : "";
+      const btns = [];
+      if (d.status === "error" || d.status === "cancelled") btns.push(`<button class="icon-btn" type="button" data-retry="${d.id}" aria-label="${esc(t("js_cat_retry"))}" title="${esc(t("js_cat_retry"))}">${icon("refresh", 16)}</button>`);
+      btns.push(`<button class="icon-btn" type="button" data-dl-x="${d.id}" aria-label="${esc(t("js_cancel"))}" title="${esc(t("js_cancel"))}">${icon("x", 16)}</button>`);
+      return `<div class="up"><span><b>${esc(d.name)}</b> <span class="note">→ /${esc(d.folder)}</span></span>
+        <span style="display:flex;gap:8px;align-items:center"><small>${status}${esc(verified)}</small>${btns.join("")}</span>
+        <div class="bar"><i style="width:${d.status === "done" ? 100 : pc}%"></i></div></div>`;
+    }
+    const last = {};
+    async function poll() {
+      let busy = false;
+      try {
+        const r = await api("GET", "/api/downloads");
+        const now = Date.now();
+        r.downloads.forEach((d) => {
+          const p = last[d.id];
+          if (p && d.status === "downloading" && now > p.t) d.speed = Math.max(0, (d.received - p.b) / ((now - p.t) / 1000));
+          last[d.id] = {t: now, b: d.received};
+          if (["queued", "downloading", "verifying"].includes(d.status)) busy = true;
+          if (d.status === "done" && p && p.s !== "done") markInLibrary(d.filename);
+          last[d.id].s = d.status;
+        });
+        panel.hidden = !r.downloads.length;
+        list.innerHTML = r.downloads.map(dlRow).join("");
+      } catch (e) { /* ignore */ }
+      setTimeout(poll, busy ? 1500 : 6000);
+    }
+    list.addEventListener("click", async (e) => {
+      const x = e.target.closest("[data-dl-x]"), rt = e.target.closest("[data-retry]");
+      try {
+        if (x) await api("DELETE", "/api/downloads/" + x.dataset.dlX);
+        if (rt) await api("POST", `/api/downloads/${rt.dataset.retry}/retry`);
+      } catch (err) { toast(err.message, "error"); }
+      if (x || rt) setTimeout(poll, 100);
+    });
+
+    const files = {};
+    function markInLibrary(filename) {
+      $$(".catcard").forEach((c) => { if (files[c.dataset.entry] === filename) c.querySelector("[data-chips]").insertAdjacentHTML("afterbegin", `<span class="chip yes">${esc(t("js_cat_in_lib"))}</span> `); });
+    }
+    $$(".catcard").forEach(async (card) => {
+      const ver = $("[data-ver]", card), btn = $("[data-get]", card), chips = $("[data-chips]", card);
+      try {
+        const r = await api("GET", "/api/catalog/" + card.dataset.entry);
+        files[card.dataset.entry] = r.filename;
+        ver.textContent = `${r.version ? t("js_cat_version", {v: r.version}) + " · " : ""}${r.hash ? r.algo.toUpperCase() + " " + t("js_cat_checked") : t("js_cat_nosum")}`;
+        if (r.pinned) chips.insertAdjacentHTML("beforeend", ` <span class="chip" title="${esc(t("js_cat_pinned_d"))}">${esc(t("js_cat_pinned"))}</span>`);
+        if (r.in_library) chips.insertAdjacentHTML("afterbegin", `<span class="chip yes">${esc(t("js_cat_in_lib"))}</span> `);
+        btn.disabled = false;
+      } catch (e) {
+        ver.innerHTML = `<span class="status-err">${esc(t("js_cat_unreachable"))}</span>`;
+        ver.title = e.message;
+      }
+      btn.addEventListener("click", () => askFolder(card.dataset.name, card.dataset.folder, async (folder) => {
+        await api("POST", `/api/catalog/${card.dataset.entry}/download`, {folder});
+      }));
+    });
+
+    function askFolder(name, folder, go) {
+      modal(`<div class="modal-h"><h2>${esc(name)}</h2></div><form class="modal-b" id="dlf">
+        <div class="field"><label for="dl_folder">${esc(t("js_cat_folder"))}</label>
+        <input class="input" id="dl_folder" list="dl_folders" value="${esc(folder)}"><datalist id="dl_folders">${folderOpts}</datalist>
+        <span class="hint">${esc(t("js_cat_folder_hint"))}</span></div>
+        <div class="actions"><button class="btn btn-outline" data-close type="button">${esc(t("js_cancel"))}</button>
+        <button class="btn btn-accent" type="submit">${icon("download")}${esc(t("js_cat_start"))}</button></div></form>`,
+      (root, close) => {
+        $("#dlf", root).addEventListener("submit", async (e) => {
+          e.preventDefault();
+          try { await go($("#dl_folder", root).value.trim()); close(); toast(t("js_cat_queued")); poll(); }
+          catch (err) { toast(errText(err), "error"); }
+        });
+      });
+    }
+
+    $("#fromUrl").addEventListener("click", () => {
+      modal(`<div class="modal-h"><h2>${esc(t("js_cat_url_t"))}</h2></div><form class="modal-b" id="urlf">
+        <div class="field"><label for="u_url">URL</label><input class="input" id="u_url" type="url" required placeholder="https://…/image.iso"></div>
+        <div class="field"><label for="u_name">${esc(t("js_cat_filename"))}</label><input class="input" id="u_name" placeholder="${esc(t("js_cat_filename_ph"))}"></div>
+        <div class="field"><label for="u_folder">${esc(t("js_cat_folder"))}</label><input class="input" id="u_folder" list="u_folders"><datalist id="u_folders">${folderOpts}</datalist></div>
+        <div class="field"><label for="u_sum">${esc(t("js_cat_sum"))}</label><input class="input num" id="u_sum" placeholder="SHA-256 / SHA-512 / SHA-1 / MD5"><span class="hint">${esc(t("js_cat_sum_hint"))}</span></div>
+        <div class="actions"><button class="btn btn-outline" data-close type="button">${esc(t("js_cancel"))}</button>
+        <button class="btn btn-accent" type="submit">${icon("download")}${esc(t("js_cat_start"))}</button></div></form>`,
+      (root, close) => {
+        $("#urlf", root).addEventListener("submit", async (e) => {
+          e.preventDefault();
+          try {
+            await api("POST", "/api/downloads", {url: $("#u_url", root).value.trim(), filename: $("#u_name", root).value.trim(),
+              folder: $("#u_folder", root).value.trim(), checksum: $("#u_sum", root).value.trim()});
+            close(); toast(t("js_cat_queued")); poll();
+          } catch (err) { toast(errText(err), "error"); }
+        });
+      });
+    });
+    poll();
+  };
+
   Page.menu = function () {
     const box = $("#menuPreview"), raw = $("#menuScript");
     async function load(fw) {

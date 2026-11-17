@@ -15,6 +15,7 @@ A network boot server for Debian 13 that works like Ventoy over the network. Upl
 | | |
 |---|---|
 | ISO library | Resumable uploads of large ISOs (chunked, survive a dropped connection), folders become submenus, automatic detection of the boot method. |
+| ISO catalog | One-click downloads of Ubuntu, Debian, Rocky, Proxmox VE/PBS, TrueNAS, Clonezilla and Memtest86+, always the newest release, verified against the vendor's checksum. Or download any ISO from a URL. Downloads resume after a restart. |
 | Boot menu | Generated from the library. Default entry, timeout, title, and a live preview of the iPXE menu. |
 | Live clients | Which client is booting what, firmware type, progress and transfer speed. |
 | Statistics | Bandwidth over time, data served per day, running tasks, top ISOs. |

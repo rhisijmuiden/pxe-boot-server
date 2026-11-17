@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import answers, auth, config, db, dnsmasq, i18n, ipxe, isos, live, mailer, system, uploads, windows
+from . import answers, auth, catalog, config, db, dnsmasq, i18n, ipxe, isos, live, mailer, system, uploads, windows
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("pxe")
@@ -42,6 +42,7 @@ async def _lifespan(_app):
     uploads.cleanup()
     isos.scan_async()
     live.start()
+    catalog.start()
     yield
 
 
@@ -597,6 +598,97 @@ def api_upload_cancel(request: Request, uid: str):
     auth.require_user(request)
     api_csrf(request)
     uploads.cancel(uid)
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------- ISO catalog
+
+@app.get("/catalog")
+def catalog_page(request: Request):
+    auth.require_user(request)
+    groups = []
+    for cat in ("linux", "infra", "tools"):
+        groups.append({"key": cat, "entries": [e for e in catalog.CATALOG if e["category"] == cat]})
+    return render(request, "catalog.html", {"nav": "catalog", "groups": groups, "folders": isos.folders()})
+
+
+@app.get("/api/catalog/{entry_id}")
+def api_catalog_resolve(request: Request, entry_id: str):
+    auth.require_user(request)
+    try:
+        res = catalog.resolve(entry_id)
+    except catalog.ResolveError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)
+    res["in_library"] = catalog.in_library(res["filename"])
+    return res
+
+
+def _queue_response(fn):
+    try:
+        return {"id": fn()}
+    except FileExistsError:
+        return JSONResponse({"error": "exists"}, status_code=409)
+    except catalog.ResolveError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+
+
+@app.post("/api/catalog/{entry_id}/download")
+async def api_catalog_download(request: Request, entry_id: str):
+    user = auth.require_user(request)
+    api_csrf(request)
+    data = await request.json()
+    entry = catalog.BY_ID.get(entry_id)
+    if entry is None:
+        raise HTTPException(404)
+
+    def go():
+        res = catalog.resolve(entry_id)
+        name = f"{entry['name']} {res['version']}".strip()
+        return catalog.queue(url=res["url"], filename=res["filename"], folder=data.get("folder", entry["folder"]),
+                             expected=res["hash"], name=name, catalog_id=entry_id, archive=entry.get("archive", ""),
+                             user_id=user["id"])
+    return _queue_response(go)
+
+
+@app.post("/api/downloads")
+async def api_download_url(request: Request):
+    user = auth.require_user(request)
+    api_csrf(request)
+    data = await request.json()
+    url = str(data.get("url", "")).strip()
+    filename = str(data.get("filename", "")).strip()
+    archive = ""
+    if not filename:
+        from urllib.parse import unquote, urlparse
+        filename = unquote(urlparse(url).path.rsplit("/", 1)[-1])
+    if filename.lower().endswith(".iso.zip"):
+        filename, archive = filename[:-4], "zip"
+    return _queue_response(lambda: catalog.queue(url=url, filename=filename, folder=str(data.get("folder", "")),
+                                                 expected=str(data.get("checksum", "")), archive=archive,
+                                                 user_id=user["id"]))
+
+
+@app.get("/api/downloads")
+def api_downloads(request: Request):
+    auth.require_user(request)
+    return {"downloads": catalog.list_downloads()}
+
+
+@app.delete("/api/downloads/{did}")
+def api_download_cancel(request: Request, did: int):
+    auth.require_user(request)
+    api_csrf(request)
+    catalog.cancel(did)
+    return {"ok": True}
+
+
+@app.post("/api/downloads/{did}/retry")
+def api_download_retry(request: Request, did: int):
+    auth.require_user(request)
+    api_csrf(request)
+    catalog.retry(did)
     return {"ok": True}
 
 
