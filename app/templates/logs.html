@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% from "_head.html" import head %}
+{% block content %}
+{% set act %}<button class="btn btn-outline" id="logPause" type="button" aria-pressed="false"><svg><use href="#i-refresh"/></svg><span>{{ t('log_live') }}</span></button>{% endset %}
+{{ head(t('logs'), t('logs_sub'), act) }}
+<div class="panel">
+  <div class="panel-h">
+    <div class="tabs" role="tablist" id="logTabs">
+      <button type="button" role="tab" data-kind="http" class="on" aria-selected="true">HTTP</button>
+      <button type="button" role="tab" data-kind="tftp" aria-selected="false">TFTP</button>
+      <button type="button" role="tab" data-kind="dhcp" aria-selected="false">DHCP</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <label class="check-row small" id="allWrap"><input type="checkbox" id="logAll"> {{ t('log_all') }}</label>
+      <input class="input" id="logQ" type="search" placeholder="{{ t('log_filter') }}" aria-label="{{ t('log_filter') }}" style="width:240px">
+    </div>
+  </div>
+  <div class="tbl-wrap"><table><thead id="logHead"></thead><tbody id="logBody"><tr><td class="note">…</td></tr></tbody></table></div>
+  <div class="panel-b note small" id="logErr" hidden></div>
+</div>
+<div class="callout"><svg><use href="#i-info"/></svg><span>{{ t('logs_note') }}</span></div>
+{% endblock %}
+{% block scripts %}<script>PXEPage.logs();</script>{% endblock %}

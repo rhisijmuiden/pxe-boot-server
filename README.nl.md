@@ -21,6 +21,7 @@ Een netwerkbootserver voor Debian 13 die werkt als Ventoy via het netwerk. Uploa
 | Statistieken | Bandbreedte in de tijd, verstuurde data per dag, lopende taken, populairste ISO's. |
 | Antwoordbestanden | Wizard in zes stappen voor installaties zonder vragen: Windows `autounattend.xml` (editie, productcode, lokale beheerder, schijf, Win11-controles), Ubuntu autoinstall, Debian preseed, Kickstart en Proxmox `answer.toml`. |
 | Machines & groepen | Koppel een MAC-adres of een groep machines aan een ISO (en eventueel een antwoordbestand): alleen de volgende boot, elke boot, of voorgeselecteerd in het menu. Groepen vangen nieuwe machines op MAC-prefix, bijvoorbeeld alle Proxmox-VM's. |
+| Serverlogs | Live HTTP-verzoeken (nginx), TFTP-overdrachten en DHCP/PXE-antwoorden (dnsmasq), te filteren op IP, MAC of bestand. |
 | Netwerk & PXE | Proxy DHCP naast je bestaande router (standaard) of een volledige DHCP-server; netwerkkaarten kiezen; VLAN-interfaces toevoegen. |
 | VLAN-handleidingen | Stap voor stap voor UniFi UDM-Pro, in de app en in [docs/](docs/howto-vlan-unifi.nl.md). |
 | Mailserver | Je eigen SMTP-server met STARTTLS of SSL/TLS, inloggegevens en een testknop; voor wachtwoordherstel en meldingen. |

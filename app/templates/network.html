@@ -18,6 +18,7 @@
       <div class="field"><label for="uefi_loader">{{ t('uefi_bin') }}</label><select class="input" id="uefi_loader" name="uefi_loader">
         <option value="snponly.efi" {{ 'selected' if s.uefi_loader != 'ipxe.efi' }}>snponly.efi · {{ t('uefi_snp') }}</option>
         <option value="ipxe.efi" {{ 'selected' if s.uefi_loader == 'ipxe.efi' }}>ipxe.efi · {{ t('uefi_ipxe') }}</option></select></div>
+      <div class="field full"><label class="check-row"><input type="checkbox" name="log_dhcp" value="1" {{ 'checked' if s.log_dhcp }}> {{ t('log_dhcp') }}</label><span class="hint">{{ t('log_dhcp_hint') }}</span></div>
     </div>
     <div class="field"><label>{{ t('mode') }}</label><div class="radios">
       <label class="radio {{ 'on' if s.dhcp_mode != 'full' }}"><input type="radio" name="dhcp_mode" value="proxy" {{ 'checked' if s.dhcp_mode != 'full' }} hidden><span class="rb"></span><span><b>{{ t('m_proxy') }}</b><p>{{ t('m_proxy_d') }}</p></span></label>

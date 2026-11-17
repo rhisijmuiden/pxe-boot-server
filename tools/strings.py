@@ -287,6 +287,19 @@ S = {
 "group_saved": ("Group saved.", "Groep opgeslagen."),
 "err_prefix": ("Enter MAC prefixes like 52:54:00, separated by commas.", "Vul MAC-prefixen in zoals 52:54:00, gescheiden door komma's."),
 "err_group_name": ("Give the group a name.", "Geef de groep een naam."),
+# server logs
+"logs": ("Server logs", "Serverlogs"),
+"logs_sub": ("What the boot server is sending right now: HTTP requests, TFTP transfers and DHCP answers. Refreshes every few seconds.", "Wat de bootserver nu verstuurt: HTTP-verzoeken, TFTP-overdrachten en DHCP-antwoorden. Ververst elke paar seconden."),
+"log_live": ("Live", "Live"), "log_all": ("Also web interface requests", "Ook verzoeken van de webinterface"),
+"log_filter": ("Filter on IP, MAC or file", "Filter op IP, MAC of bestand"),
+"logs_note": ("TFTP only carries the first small loader (undionly.kpxe or snponly.efi). Everything after that, menus, kernels and ISOs, goes over HTTP.", "Via TFTP gaat alleen de eerste kleine loader (undionly.kpxe of snponly.efi). Alles daarna, menu's, kernels en ISO's, gaat via HTTP."),
+"log_dhcp": ("Log every DHCP and PXE answer", "Elk DHCP- en PXE-antwoord loggen"),
+"log_dhcp_hint": ("Shows each PXE request on the Server logs page. Handy when a machine does not boot; leave it off otherwise.", "Toont elk PXE-verzoek op de pagina Serverlogs. Handig als een machine niet opstart; laat het anders uit."),
+"js_log_time": ("Time", "Tijd"), "js_log_client": ("Client", "Client"), "js_log_status": ("Status", "Status"),
+"js_log_size": ("Size", "Grootte"), "js_log_path": ("Path", "Pad"), "js_log_file": ("File", "Bestand"), "js_log_message": ("Message", "Melding"),
+"js_log_empty": ("Nothing logged yet.", "Nog niets gelogd."), "js_log_error": ("Could not read the log", "Kon het log niet lezen"),
+"js_log_dhcp_off": ("Only errors are logged now. Turn on 'Log every DHCP and PXE answer' under Network & PXE to see each request.", "Nu worden alleen fouten gelogd. Zet 'Elk DHCP- en PXE-antwoord loggen' aan bij Netwerk & PXE om elk verzoek te zien."),
+"js_log_live": ("Live", "Live"), "js_log_paused": ("Paused", "Gepauzeerd"),
 }
 
 if __name__ == "__main__":
