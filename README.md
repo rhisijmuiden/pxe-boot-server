@@ -24,6 +24,7 @@ A network boot server for Debian 13 that works like Ventoy over the network. Upl
 | Server logs | Live HTTP requests (nginx), TFTP transfers and DHCP/PXE answers (dnsmasq), filter on IP, MAC or file. |
 | Proxmox VMs | Create a VM on Proxmox VE (API token) that network boots a chosen ISO, optionally with an answer file: right boot order, 2 MB OVMF vars for UEFI PXE, VirtIO for Linux and SATA/E1000/TPM for Windows. |
 | Network & PXE | Proxy DHCP next to your existing router (default) or a full DHCP server; choose interfaces; add VLAN interfaces. |
+| Secure Boot | Optional: UEFI clients get the Microsoft-signed shim and the official signed iPXE (downloaded by the installer/updater), and Linux installers boot through their own signed shim. Windows boots through the signed wimboot. |
 | VLAN how-tos | Step-by-step guides for UniFi UDM-Pro, in the app and in [docs/](docs/howto-vlan-unifi.md). |
 | Mail server | Your own SMTP server with STARTTLS or SSL/TLS, authentication and a test button; used for password resets and notifications. |
 | Info & updates | Version, check for updates and update from the web interface; switch between the `main` (production) and `test` channel. |

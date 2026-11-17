@@ -527,5 +527,9 @@
  "js_pve_created_started": "VM {id} created and started. Follow it under Live clients.",
  "js_pve_bad_name": "Use letters, numbers and dashes in the VM name.",
  "js_pve_bad_fw": "This ISO only boots with Legacy BIOS.",
- "js_pve_bad_iso": "Choose an ISO that is ready."
+ "js_pve_bad_iso": "Choose an ISO that is ready.",
+ "sb_on": "UEFI Secure Boot (signed shim and iPXE)",
+ "sb_ready": "signed loaders present",
+ "sb_missing": "signed loaders not downloaded yet, run an update",
+ "sb_hint": "UEFI clients get the Microsoft-signed shim and the official signed iPXE, so they boot with Secure Boot switched on. Also works with Secure Boot off. Windows (wimboot) and Linux installers with a signed shim (Ubuntu, Debian, RHEL family, Fedora, Proxmox) boot; unsigned ISOs only boot with Secure Boot off."
 }
