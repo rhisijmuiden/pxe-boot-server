@@ -15,6 +15,7 @@ Een netwerkbootserver voor Debian 13 die werkt als Ventoy via het netwerk. Uploa
 | | |
 |---|---|
 | ISO-bibliotheek | Hervatbare uploads van grote ISO's (in delen, overleven een verbroken verbinding), mappen worden submenu's, de bootmethode wordt automatisch herkend. |
+| ISO-catalogus | Met één klik Ubuntu, Debian, Rocky, Proxmox VE/PBS, TrueNAS, Clonezilla en Memtest86+ downloaden, altijd de nieuwste versie, gecontroleerd met de checksum van de leverancier. Of een willekeurige ISO via een URL. Downloads gaan verder na een herstart. |
 | Bootmenu | Gemaakt uit de bibliotheek. Standaardkeuze, wachttijd, titel en een live voorbeeld van het iPXE-menu. |
 | Live clients | Welke client wat aan het booten is, firmwaretype, voortgang en snelheid. |
 | Statistieken | Bandbreedte in de tijd, verstuurde data per dag, lopende taken, populairste ISO's. |

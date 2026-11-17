@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "_head.html" import head %}
+{% block content %}
+{% set act %}<button class="btn btn-accent" id="fromUrl" type="button"><svg><use href="#i-download"/></svg>{{ t('cat_from_url') }}</button>{% endset %}
+{{ head(t('catalog'), t('cat_sub'), act) }}
+<div class="panel" id="dlPanel" hidden>
+  <div class="panel-h"><h2>{{ t('cat_downloads') }}</h2></div>
+  <div class="uploads" id="dlList"></div>
+</div>
+{% for g in groups %}
+<section class="cat-group">
+  <h2 class="cat-h">{{ t('cat_g_' + g.key) }}</h2>
+  <div class="cat-grid">
+    {% for e in g.entries %}
+    <article class="panel catcard" data-entry="{{ e.id }}" data-folder="{{ e.folder }}" data-name="{{ e.name }}">
+      <div class="catcard-h"><span class="osicon">{{ e.tag }}</span>
+        <div style="min-width:0"><b>{{ e.name }}</b><small class="note" data-ver>{{ t('cat_checking') }}</small></div></div>
+      <p class="small note">{{ t('cat_d_' + e.id) }}</p>
+      <div class="catcard-f">
+        <span data-chips><span class="chip">{{ e.folder }}/</span></span>
+        <button class="btn btn-dark btn-sm" type="button" data-get disabled><svg><use href="#i-download"/></svg>{{ t('download') }}</button>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{% endfor %}
+<div class="callout"><svg><use href="#i-info"/></svg><span>{{ t('cat_note') }}</span></div>
+<template id="folderOpts"><option value="">/</option>{% for f in folders %}<option value="{{ f }}">{{ f }}</option>{% endfor %}</template>
+{% endblock %}
+{% block scripts %}<script>PXEPage.catalog();</script>{% endblock %}

@@ -95,6 +95,29 @@ SCHEMA = [
     """
     UPDATE settings SET value='"snponly.efi"' WHERE key='uefi_loader' AND value='"ipxe.efi"';
     """,
+    # version 3: ISO catalog downloads
+    """
+    CREATE TABLE downloads (
+        id INTEGER PRIMARY KEY,
+        catalog_id TEXT NOT NULL DEFAULT '',
+        name TEXT NOT NULL,
+        url TEXT NOT NULL,
+        filename TEXT NOT NULL,
+        folder TEXT NOT NULL DEFAULT '',
+        archive TEXT NOT NULL DEFAULT '',
+        expected TEXT NOT NULL DEFAULT '',
+        actual TEXT NOT NULL DEFAULT '',
+        size INTEGER NOT NULL DEFAULT 0,
+        received INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'queued',
+        error TEXT NOT NULL DEFAULT '',
+        iso_id INTEGER,
+        dismissed INTEGER NOT NULL DEFAULT 0,
+        user_id INTEGER,
+        created REAL NOT NULL,
+        updated REAL NOT NULL
+    );
+    """,
 ]
 
 
