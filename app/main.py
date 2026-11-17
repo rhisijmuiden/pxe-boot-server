@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import answers, auth, catalog, config, db, dnsmasq, i18n, ipxe, isos, live, logs, mailer, rules, system, uploads, windows
+from . import answers, auth, catalog, config, db, dnsmasq, i18n, ipxe, isos, live, logs, mailer, proxmox, rules, system, uploads, windows
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("pxe")
@@ -967,6 +967,132 @@ def api_machine_delete(request: Request, mid: int):
     api_csrf(request)
     db.run("DELETE FROM machines WHERE id=?", mid)
     return {"ok": True}
+
+
+# ---------------------------------------------------------------- Proxmox
+
+@app.get("/proxmox")
+def proxmox_page(request: Request):
+    auth.require_user(request)
+    s = proxmox.settings()
+    return render(request, "proxmox.html", {
+        "nav": "proxmox", "s": s, "configured": proxmox.configured(),
+        "isos": [r for r in isos.list_isos() if r["status"] == "ready"], "answers": answers.list_answers(),
+    })
+
+
+@app.post("/proxmox/settings")
+async def proxmox_settings_save(request: Request):
+    auth.require_admin(request)
+    form = await form_csrf(request)
+    s = proxmox.settings()
+    try:
+        s["host"] = proxmox.normalize_host(form.get("host", ""))
+    except ValueError:
+        flash(request, "err_pve_host", "error")
+        return RedirectResponse("/proxmox", status_code=303)
+    token = form.get("token_id", "").strip()
+    if token and not re.fullmatch(r"[^\s!=]+@[^\s!=]+![^\s!=]+", token):
+        flash(request, "err_pve_token", "error")
+        return RedirectResponse("/proxmox", status_code=303)
+    s["token_id"] = token
+    if form.get("secret", "").strip():
+        s["secret"] = form["secret"].strip()
+    if not token:
+        s["secret"] = ""
+    s["verify"] = bool(form.get("verify"))
+    db.set_setting("proxmox", s)
+    flash(request, "saved")
+    return RedirectResponse("/proxmox", status_code=303)
+
+
+def _pve(fn):
+    try:
+        return fn()
+    except proxmox.ProxmoxError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)
+
+
+@app.post("/api/proxmox/test")
+def api_proxmox_test(request: Request):
+    auth.require_user(request)
+    api_csrf(request)
+    return _pve(proxmox.overview)
+
+
+@app.get("/api/proxmox/options")
+def api_proxmox_options(request: Request, node: str = ""):
+    auth.require_user(request)
+    if not re.fullmatch(r"[A-Za-z0-9_.\-]{1,64}", node):
+        raise HTTPException(400)
+    return _pve(lambda: proxmox.node_options(node))
+
+
+@app.get("/api/proxmox/vms")
+def api_proxmox_vms(request: Request):
+    auth.require_user(request)
+
+    def go():
+        vms = proxmox.list_vms()
+        by_name = {r["name"].lower(): r for r in db.q("SELECT name, mac, mode, used FROM machines WHERE name<>''")}
+        for v in vms:
+            m = by_name.get(v["name"].lower())
+            v["mac"] = m["mac"] if m else ""
+            v["url"] = proxmox.console_url(v["node"], v["vmid"])
+        return {"vms": vms}
+    return _pve(go)
+
+
+@app.post("/api/proxmox/vms")
+async def api_proxmox_create(request: Request):
+    auth.require_user(request)
+    api_csrf(request)
+    data = await request.json()
+    row = isos.get(int(data.get("iso_id") or 0))
+    if row is None or row["status"] != "ready":
+        return JSONResponse({"error": "iso"}, status_code=400)
+    try:
+        spec = proxmox.validate({
+            "name": str(data.get("name", "")).strip(), "node": data.get("node", ""), "storage": data.get("storage", ""),
+            "bridge": data.get("bridge", ""), "vlan": data.get("vlan"), "cores": data.get("cores"),
+            "memory_mb": int(float(data.get("memory_gb") or 0) * 1024), "disk_gb": data.get("disk_gb"),
+            "firmware": data.get("firmware"),
+        })
+    except (ValueError, TypeError) as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+    if not ipxe.platform_ok(isos.method_of(row), "efi" if spec["firmware"] == "uefi" else "pcbios"):
+        return JSONResponse({"error": "firmware"}, status_code=400)
+    answer_id = int(data.get("answer_id") or 0) or None
+    if answer_id:
+        a = answers.get(answer_id)
+        if a is None or a["iso_id"] != row["id"]:
+            answer_id = None
+    mode = data.get("mode") if data.get("mode") in ("once", "always") else "once"
+
+    def go():
+        vm = proxmox.create_vm(spec, row)
+        db.run("INSERT INTO machines(mac,name,iso_id,answer_id,mode,created) VALUES(?,?,?,?,?,?) "
+               "ON CONFLICT(mac) DO UPDATE SET name=excluded.name, iso_id=excluded.iso_id, "
+               "answer_id=excluded.answer_id, mode=excluded.mode, used=0",
+               vm["mac"], spec["name"], row["id"], answer_id, mode, time.time())
+        s = proxmox.settings()
+        s.update({"node": spec["node"], "storage": spec["storage"], "bridge": spec["bridge"]})
+        db.set_setting("proxmox", s)
+        started = False
+        if data.get("start"):
+            proxmox.start_vm(vm["node"], vm["vmid"])
+            started = True
+        return vm | {"started": started, "url": proxmox.console_url(vm["node"], vm["vmid"])}
+    return _pve(go)
+
+
+@app.post("/api/proxmox/vms/{node}/{vmid}/start")
+def api_proxmox_start(request: Request, node: str, vmid: int):
+    auth.require_user(request)
+    api_csrf(request)
+    if not re.fullmatch(r"[A-Za-z0-9_.\-]{1,64}", node):
+        raise HTTPException(400)
+    return _pve(lambda: (proxmox.start_vm(node, vmid), {"ok": True})[1])
 
 
 # ---------------------------------------------------------------- network

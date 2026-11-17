@@ -190,6 +190,8 @@ DEFAULTS: dict[str, Any] = {
         "username": "", "password": "", "from_addr": "", "from_name": "PXE Boot Server",
         "reply_to": "", "notify_to": "", "notify_upload": True, "notify_install": True,
     },
+    "proxmox": {"host": "", "token_id": "", "secret": "", "verify": False,
+                "node": "", "storage": "", "bridge": "vmbr0"},
     "update_channel": "main",
     "smb_password": "",
     "traffic_daily": {},

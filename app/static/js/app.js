@@ -684,6 +684,81 @@
     show(); load();
   };
 
+  Page.proxmox = function (configured) {
+    const test = $("#pveTest");
+    if (test) test.addEventListener("click", async () => {
+      test.disabled = true;
+      try { const r = await api("POST", "/api/proxmox/test"); toast(t("js_pve_ok", {v: r.version, n: r.nodes.length})); }
+      catch (e) { toast(t("js_pve_fail") + ": " + e.message, "error"); }
+      test.disabled = false;
+    });
+    if (!configured) return;
+    const form = $("#vmForm"), node = $("#v_node"), storage = $("#v_storage"), bridge = $("#v_bridge");
+    const iso = $("#v_iso"), ans = $("#v_ans"), fw = $("#v_fw"), go = $("#v_go"), list = $("#vmList");
+    const fill = (sel, items, want) => {
+      sel.innerHTML = items.map((x) => `<option ${x === want ? "selected" : ""}>${esc(x)}</option>`).join("");
+    };
+    async function loadNode() {
+      if (!node.value) return;
+      try { const o = await api("GET", "/api/proxmox/options?node=" + encodeURIComponent(node.value));
+        fill(storage, o.storages, form.dataset.storage); fill(bridge, o.bridges, form.dataset.bridge); }
+      catch (e) { toast(t("js_pve_fail") + ": " + e.message, "error"); }
+    }
+    async function init() {
+      try {
+        const r = await api("POST", "/api/proxmox/test");
+        $("#pveVer").textContent = "Proxmox VE " + r.version;
+        fill(node, r.nodes, form.dataset.node);
+        await loadNode();
+      } catch (e) { $("#pveVer").innerHTML = `<span class="status-err">${esc(t("js_pve_fail"))}: ${esc(e.message)}</span>`; }
+    }
+    function isoChanged() {
+      $$("option[data-iso]", ans).forEach((o) => { o.hidden = o.dataset.iso !== iso.value; if (o.hidden && o.selected) ans.value = ""; });
+      const opt = iso.selectedOptions[0], m = opt ? opt.dataset.method : "";
+      $("#v_win").hidden = m !== "windows";
+      if (m === "windows") { if (Number($("#v_disk").value) < 64) $("#v_disk").value = 64; }
+      if (m === "memdisk") fw.value = "bios";
+    }
+    async function loadVms() {
+      try {
+        const r = await api("GET", "/api/proxmox/vms");
+        list.innerHTML = r.vms.length ? r.vms.map((v) => `<tr><td class="num">${v.vmid}</td><td><b>${esc(v.name)}</b></td><td>${esc(v.node)}</td>
+          <td class="num">${esc(v.mac || "–")}</td><td><span class="pill ${v.status === "running" ? "ok" : "off"}">${esc(v.status)}</span></td>
+          <td style="white-space:nowrap">${v.status !== "running" ? `<button class="btn btn-outline btn-sm" type="button" data-start="${esc(v.node)}/${v.vmid}">${esc(t("js_pve_start"))}</button> ` : ""}
+          <a class="btn btn-outline btn-sm" href="${esc(v.url)}" target="_blank" rel="noopener">${esc(t("js_pve_open"))}</a></td></tr>`).join("")
+          : `<tr><td class="note" colspan="6">${esc(t("js_pve_none"))}</td></tr>`;
+      } catch (e) { list.innerHTML = `<tr><td class="status-err" colspan="6">${esc(e.message)}</td></tr>`; }
+    }
+    list.addEventListener("click", async (e) => {
+      const b = e.target.closest("[data-start]");
+      if (!b) return;
+      b.disabled = true;
+      try { await api("POST", `/api/proxmox/vms/${b.dataset.start}/start`); toast(t("js_pve_started")); }
+      catch (err) { toast(err.message, "error"); }
+      loadVms();
+    });
+    node.addEventListener("change", loadNode);
+    iso.addEventListener("change", isoChanged);
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      go.disabled = true; go.lastChild.textContent = t("js_pve_creating");
+      try {
+        const r = await api("POST", "/api/proxmox/vms", {
+          name: $("#v_name").value.trim(), node: node.value, storage: storage.value, bridge: bridge.value,
+          vlan: $("#v_vlan").value, cores: $("#v_cores").value, memory_gb: $("#v_mem").value, disk_gb: $("#v_disk").value,
+          firmware: fw.value, iso_id: iso.value, answer_id: ans.value, mode: $("#v_mode").value, start: $("#v_start").checked});
+        toast(t(r.started ? "js_pve_created_started" : "js_pve_created", {id: r.vmid, mac: r.mac}));
+        $("#v_name").value = "";
+        loadVms();
+      } catch (err) {
+        const key = {name: "js_pve_bad_name", firmware: "js_pve_bad_fw", iso: "js_pve_bad_iso"}[err.message];
+        toast(key ? t(key) : t("js_pve_fail") + ": " + err.message, "error");
+      }
+      go.disabled = false; go.lastChild.textContent = t("js_pve_create");
+    });
+    isoChanged(); init(); loadVms();
+  };
+
   Page.menu = function () {
     const box = $("#menuPreview"), raw = $("#menuScript");
     async function load(fw) {

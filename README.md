@@ -22,6 +22,7 @@ A network boot server for Debian 13 that works like Ventoy over the network. Upl
 | Answer files | Six-step wizard for unattended installs: Windows `autounattend.xml` (edition, key, local admin, disk, Win11 checks), Ubuntu autoinstall, Debian preseed, Kickstart and Proxmox `answer.toml`. |
 | Machines & groups | Link a MAC address or a group of machines to an ISO (and optionally an answer file): next boot only, every boot, or preselected in the menu. Groups can catch new machines by MAC prefix, for example all Proxmox VMs. |
 | Server logs | Live HTTP requests (nginx), TFTP transfers and DHCP/PXE answers (dnsmasq), filter on IP, MAC or file. |
+| Proxmox VMs | Create a VM on Proxmox VE (API token) that network boots a chosen ISO, optionally with an answer file: right boot order, 2 MB OVMF vars for UEFI PXE, VirtIO for Linux and SATA/E1000/TPM for Windows. |
 | Network & PXE | Proxy DHCP next to your existing router (default) or a full DHCP server; choose interfaces; add VLAN interfaces. |
 | VLAN how-tos | Step-by-step guides for UniFi UDM-Pro, in the app and in [docs/](docs/howto-vlan-unifi.md). |
 | Mail server | Your own SMTP server with STARTTLS or SSL/TLS, authentication and a test button; used for password resets and notifications. |
