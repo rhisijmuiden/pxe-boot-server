@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% from "_head.html" import head %}
+{% block content %}
+{{ head(t('proxmox'), t('pve_sub')) }}
+{% if configured %}
+<form class="panel" id="vmForm" data-node="{{ s.node }}" data-storage="{{ s.storage }}" data-bridge="{{ s.bridge }}">
+  <div class="panel-h"><h2>{{ t('pve_new') }}</h2><span class="note small" id="pveVer"></span></div>
+  <div class="panel-b" style="display:flex;flex-direction:column;gap:18px">
+    <div class="form">
+      <div class="field"><label for="v_name">{{ t('pve_name') }}</label><input class="input" id="v_name" required maxlength="63" pattern="[A-Za-z0-9]([A-Za-z0-9\-]*[A-Za-z0-9])?" placeholder="web02"><span class="hint">{{ t('pve_name_hint') }}</span></div>
+      <div class="field"><label for="v_node">{{ t('pve_node') }}</label><select class="input" id="v_node" required></select></div>
+      <div class="field"><label for="v_iso">{{ t('m_iso') }}</label><select class="input" id="v_iso" required>
+        {% for i in isos %}<option value="{{ i.id }}" data-method="{{ i.method_override or i.method }}" {{ 'selected' if i.id == (request.query_params.get('iso')|int) }}>{{ i.name }}</option>{% endfor %}</select></div>
+      <div class="field"><label for="v_ans">{{ t('m_ans') }}</label><select class="input" id="v_ans"><option value="">{{ t('m_none') }}</option>
+        {% for a in answers %}<option value="{{ a.id }}" data-iso="{{ a.iso_id }}">{{ a.name }}</option>{% endfor %}</select></div>
+    </div>
+    <div class="grid-4">
+      <div class="field"><label for="v_cores">{{ t('pve_cores') }}</label><input class="input num" id="v_cores" type="number" min="1" max="128" value="2"></div>
+      <div class="field"><label for="v_mem">{{ t('pve_mem') }}</label><input class="input num" id="v_mem" type="number" min="1" max="1024" step="0.5" value="4"></div>
+      <div class="field"><label for="v_disk">{{ t('pve_disk') }}</label><input class="input num" id="v_disk" type="number" min="4" max="65536" value="32"></div>
+      <div class="field"><label for="v_fw">{{ t('pve_fw') }}</label><select class="input" id="v_fw"><option value="uefi">UEFI (OVMF)</option><option value="bios">Legacy BIOS (SeaBIOS)</option></select></div>
+      <div class="field"><label for="v_storage">{{ t('pve_storage') }}</label><select class="input" id="v_storage" required></select></div>
+      <div class="field"><label for="v_bridge">{{ t('pve_bridge') }}</label><select class="input" id="v_bridge" required></select></div>
+      <div class="field"><label for="v_vlan">{{ t('pve_vlan') }}</label><input class="input num" id="v_vlan" type="number" min="1" max="4094" placeholder="–"></div>
+      <div class="field"><label for="v_mode">{{ t('m_mode') }}</label><select class="input" id="v_mode"><option value="once">{{ t('mo_once') }}</option><option value="always">{{ t('mo_always') }}</option></select></div>
+    </div>
+    <label class="check-row"><input type="checkbox" id="v_start" checked> {{ t('pve_start') }}</label>
+    <div class="callout" id="v_win" hidden><svg><use href="#i-info"/></svg><span>{{ t('pve_win_note') }}</span></div>
+    <div class="actions"><button class="btn btn-accent" type="submit" id="v_go"><svg><use href="#i-plus"/></svg>{{ t('pve_create') }}</button></div>
+  </div>
+</form>
+<div class="panel"><div class="panel-h"><h2>{{ t('pve_vms') }}</h2></div>
+  <div class="tbl-wrap"><table><thead><tr><th>ID</th><th>{{ t('pve_name') }}</th><th>{{ t('pve_node') }}</th><th>{{ t('col_mac2') }}</th><th>Status</th><th></th></tr></thead>
+  <tbody id="vmList"><tr><td class="note" colspan="6">…</td></tr></tbody></table></div>
+</div>
+{% elif user.role != 'admin' %}
+<div class="callout"><svg><use href="#i-info"/></svg><span>{{ t('pve_ask_admin') }}</span></div>
+{% endif %}
+{% if user.role == 'admin' %}
+<form class="panel" method="post" action="/proxmox/settings"><input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="panel-h"><h2>{{ t('pve_conn') }}</h2>{% if configured %}<button class="btn btn-outline btn-sm" type="button" id="pveTest">{{ t('pve_test') }}</button>{% endif %}</div>
+  <div class="panel-b" style="display:flex;flex-direction:column;gap:18px">
+    {% if not configured %}<p class="note" style="margin:0">{{ t('pve_howto') }}</p>{% endif %}
+    <div class="form">
+      <div class="field"><label for="p_host">{{ t('pve_host') }}</label><input class="input num" id="p_host" name="host" value="{{ s.host }}" placeholder="https://pve1.lan:8006"></div>
+      <div class="field"><label for="p_tok">{{ t('pve_token') }}</label><input class="input num" id="p_tok" name="token_id" value="{{ s.token_id }}" placeholder="pxe@pve!boot"></div>
+      <div class="field"><label for="p_sec">{{ t('pve_secret') }}</label><input class="input num" id="p_sec" name="secret" type="password" autocomplete="new-password" placeholder="{{ t('pve_secret_keep') if s.secret else 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' }}"></div>
+      <div class="field"><label>&nbsp;</label><label class="check-row"><input type="checkbox" name="verify" value="1" {{ 'checked' if s.verify }}> {{ t('pve_verify') }}</label><span class="hint">{{ t('pve_verify_hint') }}</span></div>
+    </div>
+    <div class="actions"><button class="btn btn-dark" type="submit">{{ t('save') }}</button></div>
+  </div>
+</form>
+{% endif %}
+{% endblock %}
+{% block scripts %}<script>PXEPage.proxmox({{ configured|tojson }});</script>{% endblock %}

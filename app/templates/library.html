@@ -57,6 +57,7 @@
                 <hr>
                 {% if m.answers %}<a href="/answers/new?iso={{ r.id }}"><svg width="16" height="16"><use href="#i-wand"/></svg>{{ t('newans') }}</a>{% endif %}
                 <a href="/machines?new=1&iso={{ r.id }}"><svg width="16" height="16"><use href="#i-pin"/></svg>{{ t('addm') }}</a>
+                <a href="/proxmox?iso={{ r.id }}"><svg width="16" height="16"><use href="#i-vm"/></svg>{{ t('pve_new') }}</a>
                 <button type="button" data-redetect="{{ r.id }}"><svg width="16" height="16"><use href="#i-refresh"/></svg>{{ t('redetect') }}</button>
                 <hr>
                 <button type="button" class="danger" data-delete="{{ r.id }}" data-name="{{ r.name }}"><svg width="16" height="16"><use href="#i-trash"/></svg>{{ t('delete') }}</button>
