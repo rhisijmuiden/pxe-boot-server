@@ -2,11 +2,14 @@
 {% from "_head.html" import head %}
 {% block content %}
 {{ head(t('bootmenu'), t('bm_sub')) }}
-<div class="grid-2" style="grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)">
+<div class="grid-2 bm-grid">
   <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
-    <div class="tabs" role="tablist"><button type="button" class="on" data-fw="efi">UEFI</button><button type="button" data-fw="pcbios">Legacy BIOS</button></div>
-    <div class="term" id="menuPreview" aria-live="polite"></div>
-    <p class="note small">{{ t('bm_preview_note') }}</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between">
+      <div class="tabs" role="tablist" aria-label="{{ t('bm_screen') }}"><button type="button" class="on" data-screen="menu">{{ t('bm_screen_menu') }}</button><button type="button" data-screen="auto">{{ t('bm_screen_auto') }}</button></div>
+      <div class="tabs" role="tablist" aria-label="{{ t('bm_firmware') }}"><button type="button" class="on" data-fw="efi">UEFI</button><button type="button" data-fw="pcbios">Legacy BIOS</button></div>
+    </div>
+    <div class="bootscreen fb" id="menuPreview" tabindex="0" aria-live="polite" aria-label="{{ t('bm_preview') }}"></div>
+    <p class="note small" id="menuNote">{{ t('js_bm_note_menu') }}</p>
     <details><summary class="link small">{{ t('bm_show_script') }}</summary><div class="code-wrap" style="margin-top:10px"><pre class="code" id="menuScript"></pre></div></details>
   </div>
   <div class="panel"><div class="panel-h"><h2>{{ t('settings') }}</h2></div><form class="panel-b" method="post" action="/menu" style="display:flex;flex-direction:column;gap:16px">

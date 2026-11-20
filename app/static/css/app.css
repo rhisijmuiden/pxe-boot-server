@@ -77,6 +77,7 @@ button,input,select{font:inherit;color:inherit}
 .panel-b{padding:20px}
 .grid-4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
 .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start}
+.bm-grid{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
 .stat{padding:18px 20px;display:flex;flex-direction:column;gap:6px}
 .stat .lbl{font-size:.78rem;color:var(--muted);font-weight:600}
 .stat .val{font-size:1.65rem;font-weight:800;font-stretch:125%;font-variant-numeric:tabular-nums;line-height:1.1}
@@ -152,6 +153,35 @@ tbody tr:hover td{background:var(--hover)}
 .term .g{color:#7C8AA6}
 .term .sel{background:var(--term-hl);color:var(--nacht);display:inline-block;min-width:100%;padding:0 6px;margin:0 -6px}
 .term .row{white-space:pre}
+/* boot screen preview: drawn on the iPXE background picture (static/img/ipxe-bg.png, 1024x768),
+   positions in pixels of that picture (--u), matching the iPXE console area set in app/ipxe.py */
+.bootscreen{container-type:inline-size;position:relative;width:100%;aspect-ratio:4/3;overflow:hidden;border-radius:var(--r-lg);
+  border:1px solid #1E2A44;box-shadow:0 18px 40px -18px rgb(11 18 34 / .55);font-family:"DejaVu Sans Mono","Cascadia Mono",ui-monospace,Consolas,monospace;
+  --u:calc(100cqw / 1024);user-select:none;cursor:default}
+.bootscreen:focus{outline:none} .bootscreen:focus-visible{box-shadow:0 0 0 3px var(--koraal)}
+.bootscreen .bs-title,.bootscreen .bs-items{position:absolute;left:calc(365 * var(--u));width:calc(594 * var(--u))}
+.bootscreen .bs-title{top:calc(81 * var(--u));text-align:center;white-space:pre;overflow:hidden}
+.bootscreen .bs-items{top:calc(119 * var(--u))}
+.bootscreen .bs-items>div{position:relative;white-space:pre;overflow:hidden;padding:0 calc(18 * var(--u))}
+.bootscreen .it{cursor:pointer}
+.bootscreen .cd{position:absolute;top:0;right:calc(21 * var(--u))}
+.bootscreen.fb{background:#0B1222 url(/static/img/ipxe-bg.png) center/100% 100% no-repeat}
+.bootscreen.fb>div{font-size:calc(15 * var(--u));line-height:calc(19 * var(--u))}
+.bootscreen.fb .bs-title{color:#E6ECF7;font-weight:600}
+.bootscreen.fb .gap{color:#FF6B57}
+.bootscreen.fb .it{color:#E6ECF7}
+.bootscreen.fb .sel{background:#B8392A;color:#fff;font-weight:700}
+/* legacy BIOS: 80x25 VGA text mode, where iPXE cannot change the palette */
+.bootscreen.vga{background:#000;--c:calc(100cqw / 80);--r:calc(75cqw / 25)}
+.bootscreen.vga>div{font-size:calc(var(--c) / .6);line-height:var(--r)}
+.bootscreen.vga .bs-title,.bootscreen.vga .bs-items{left:var(--c);width:calc(78 * var(--c))}
+.bootscreen.vga .bs-title{top:var(--r);color:#55FFFF;font-weight:700}
+.bootscreen.vga .bs-items{top:calc(3 * var(--r))}
+.bootscreen.vga .bs-items>div{padding:0 var(--c)}
+.bootscreen.vga .cd{right:var(--c)}
+.bootscreen.vga .gap{color:#AA0000}
+.bootscreen.vga .it{color:#AAAAAA}
+.bootscreen.vga .sel{background:#AA5500;color:#fff;font-weight:700}
 .tabs{display:inline-flex;gap:4px;background:var(--hover);border-radius:var(--r-md);padding:4px}
 .tabs button{border:0;background:none;padding:6px 12px;border-radius:7px;font-weight:700;font-size:.82rem;cursor:pointer;color:var(--muted)}
 .tabs button.on{background:var(--raised);color:var(--ink);box-shadow:0 1px 2px rgb(20 33 61 / .12)}

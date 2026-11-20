@@ -760,44 +760,150 @@
   };
 
   Page.menu = function () {
-    const box = $("#menuPreview"), raw = $("#menuScript");
-    async function load(fw) {
-      const script = await api("GET", "/api/menu/preview?platform=" + fw);
-      raw.textContent = script;
-      box.innerHTML = renderMenu(script, fw);
-    }
-    function renderMenu(script, fw) {
-      // Show the first menu of the script the way iPXE draws it.
-      const lines = script.split("\n");
-      const out = [];
-      let inMenu = false, first = true;
-      for (const l of lines) {
-        if (l.startsWith("menu ")) {
-          if (inMenu) break;
-          inMenu = true;
-          const title = l.slice(5).replace("${fwname}", fw === "efi" ? "UEFI" : "Legacy BIOS").replace("${netX/ip}", "192.0.2.10");
-          out.push(`<div class="row t">  ${esc(title)}</div><div class="row g">  ${"─".repeat(46)}</div>`);
-        } else if (inMenu && l.startsWith("item --gap")) {
-          const txt = l.replace(/^item --gap --\s?/, "");
-          out.push(`<div class="row g">  ${esc(txt || " ")}</div>`);
-        } else if (inMenu && l.startsWith("item ")) {
-          const txt = l.replace(/^item \S+ /, "");
-          out.push(`<div class="row ${first ? "sel" : ""}">  ${esc(txt)}</div>`);
-          first = false;
-        } else if (inMenu && l.startsWith("choose")) {
-          const m = /--timeout \$\{menu-timeout\}/.test(l);
-          const to = (script.match(/set menu-timeout (\d+)/) || [0, 0])[1] / 1000;
-          if (m && to) out.push(`<div class="row g"> </div><div class="row g">  ${esc(t("js_menu_timeout", {n: to}))}</div>`);
-          break;
+    // Draws the boot screen the way iPXE does: the iPXE script from the server is parsed into its
+    // menus and shown on the real background picture (UEFI) or as an 80x25 text screen (BIOS).
+    // Folders, System info, Back and "Show the full menu" open like they do on the client.
+    const box = $("#menuPreview"), raw = $("#menuScript"), note = $("#menuNote");
+    const state = {fw: "efi", screen: "menu", menus: {}, stack: [], cur: "start", sel: 0, vars: {}};
+
+    function parse(script) {
+      const menus = {}, vars = {};
+      let label = "", cur = null, menuTimeout = 0;
+      for (const rawLine of script.split("\n")) {
+        const l = rawLine.trim().replace(/\s+/g, " ");
+        let m;
+        if ((m = /^set (\S+) (.*)$/.exec(l))) {
+          vars[m[1]] = m[2];
+          if (m[1] === "menu-timeout") menuTimeout = +m[2] || 0;
+        }
+        if (l.startsWith(":")) { label = l.slice(1); cur = null; continue; }
+        if (l === "menu" || l.startsWith("menu ")) {
+          cur = menus[label] = {title: l.slice(5), items: [], dflt: null, timeout: 0};
+          continue;
+        }
+        if (!cur) continue;
+        if (l.startsWith("item")) {
+          const a = l.split(" ").slice(1), it = {gap: false, key: "", label: "", text: ""};
+          while (a.length && a[0].startsWith("--")) {
+            const o = a.shift();
+            if (o === "--gap") it.gap = true;
+            else if (o === "--key") it.key = a.shift() || "";
+            else if (o === "--") break;
+          }
+          if (it.gap) it.text = a.join(" ");
+          else { it.label = a.shift() || ""; it.text = a.join(" "); }
+          cur.items.push(it);
+        } else if (l.startsWith("choose")) {
+          if ((m = / --default (\S+)/.exec(l))) cur.dflt = m[1];
+          if ((m = / --timeout (\S+)/.exec(l))) cur.timeout = m[1].includes("menu-timeout") ? menuTimeout : +m[1] || 0;
+          cur = null;
         }
       }
-      return out.join("");
+      return {menus, vars};
     }
+
+    function clientVars(serverUrl) {
+      // Example values for what iPXE fills in on a real client.
+      const ip = (/\/\/([\d.]+)/.exec(serverUrl || "") || [])[1] || "192.0.2.10";
+      const client = ip.replace(/\.\d+$/, ".150");
+      return {
+        "fwname": state.fw === "efi" ? "UEFI" : "BIOS", "buildarch": state.fw === "efi" ? "x86_64" : "i386",
+        "netX/ip": client, "netX/mac": "52:54:00:12:34:56", "netX/netmask": "255.255.255.0",
+        "netX/gateway": client.replace(/\.\d+$/, ".1"), "server": serverUrl || "",
+        "manufacturer": "Example Computers", "product": "Model 1000", "serial": "SN0123456",
+      };
+    }
+    const subst = (s) => s.replace(/\$\{([^}:]+)(?::[^}]*)?\}/g, (_, k) => (k in state.vars ? state.vars[k] : ""));
+    const selectable = (menu) => menu.items.map((it, i) => (it.gap ? -1 : i)).filter((i) => i >= 0);
+
+    function open(label, push) {
+      const menu = state.menus[label];
+      if (!menu) return;
+      if (push) state.stack.push(state.cur);
+      state.cur = label;
+      const idx = menu.items.findIndex((it) => !it.gap && it.label === menu.dflt);
+      state.sel = idx >= 0 ? idx : (selectable(menu)[0] ?? 0);
+      draw();
+    }
+    function back() {
+      if (state.stack.length) open(state.stack.pop(), false);
+    }
+    function activate(i) {
+      const it = state.menus[state.cur].items[i];
+      if (!it || it.gap) return;
+      if (it.label === "full" && state.screen === "auto") { setScreen("menu"); return; }
+      if (!state.menus[it.label]) return;
+      if (state.stack.includes(it.label)) {
+        // A Back item: return to the menu that is already open below this one.
+        while (state.stack.length && state.stack[state.stack.length - 1] !== it.label) state.stack.pop();
+        back();
+      } else {
+        open(it.label, true);
+      }
+    }
+    function move(d) {
+      const s = selectable(state.menus[state.cur]);
+      if (!s.length) return;
+      const at = s.indexOf(state.sel);
+      state.sel = s[Math.max(0, Math.min(s.length - 1, (at < 0 ? 0 : at) + d))];
+      draw();
+    }
+
+    function draw() {
+      const menu = state.menus[state.cur];
+      if (!menu) { box.innerHTML = ""; return; }
+      const efi = state.fw === "efi", rows = efi ? 29 : 21;
+      // Scroll like iPXE when the menu is longer than the screen.
+      let first = 0;
+      if (menu.items.length > rows) first = Math.max(0, Math.min(menu.items.length - rows, state.sel - rows + 2));
+      const html = menu.items.slice(first, first + rows).map((it, k) => {
+        const i = first + k, sel = i === state.sel;
+        const count = sel && menu.timeout && it.label === menu.dflt ? `<span class="cd">(${Math.round(menu.timeout / 1000)})</span>` : "";
+        return `<div class="${it.gap ? "gap" : sel ? "it sel" : "it"}" data-i="${i}"><span class="tx">${esc(subst(it.text)) || "&nbsp;"}</span>${count}</div>`;
+      }).join("");
+      box.className = "bootscreen " + (efi ? "fb" : "vga");
+      box.innerHTML = `<div class="bs-title">${esc(subst(menu.title))}</div><div class="bs-items">${html}</div>`;
+      $$(".it", box).forEach((el) => {
+        el.addEventListener("click", () => { state.sel = +el.dataset.i; draw(); box.focus(); });
+        el.addEventListener("dblclick", () => activate(+el.dataset.i));
+      });
+    }
+
+    async function load() {
+      const script = await api("GET", `/api/menu/preview?platform=${state.fw}&screen=${state.screen}`);
+      raw.textContent = script;
+      const p = parse(script);
+      state.menus = p.menus;
+      state.vars = Object.assign({}, p.vars, clientVars(p.vars.server));
+      state.stack = [];
+      open("start", false);
+      note.textContent = t(state.screen === "auto" ? "js_bm_note_auto" : "js_bm_note_menu");
+    }
+    function setScreen(s) {
+      state.screen = s;
+      $$("[data-screen]").forEach((x) => x.classList.toggle("on", x.dataset.screen === s));
+      load();
+    }
+
+    box.addEventListener("keydown", (e) => {
+      const k = e.key;
+      if (k === "ArrowDown" || k === "ArrowUp") move(k === "ArrowDown" ? 1 : -1);
+      else if (k === "Enter" || k === "ArrowRight") activate(state.sel);
+      else if (k === "Escape" || k === "ArrowLeft" || k === "Backspace") back();
+      else if (k.length === 1) {
+        const i = state.menus[state.cur].items.findIndex((it) => !it.gap && it.key && it.key.toLowerCase() === k.toLowerCase());
+        if (i < 0) return;
+        state.sel = i; draw(); activate(i);
+      } else return;
+      e.preventDefault();
+    });
     $$("[data-fw]").forEach((b) => b.addEventListener("click", () => {
       $$("[data-fw]").forEach((x) => x.classList.toggle("on", x === b));
-      load(b.dataset.fw);
+      state.fw = b.dataset.fw;
+      load();
     }));
-    load("efi");
+    $$("[data-screen]").forEach((b) => b.addEventListener("click", () => setScreen(b.dataset.screen)));
+    load();
   };
 
   Page.answers = function () {
