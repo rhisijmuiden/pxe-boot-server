@@ -49,7 +49,7 @@ apt-get -o DPkg::Lock::Timeout=600 install -y -q --no-install-recommends \
   ca-certificates curl git sudo iproute2 openssl \
   python3 python3-venv python3-pip \
   nginx dnsmasq samba samba-common-bin \
-  xorriso syslinux-common dhcpcd-base wimtools
+  xorriso syslinux-common dhcpcd-base wimtools 7zip
 # Debian's dnsmasq package can also read /etc/default/dnsmasq; make sure it uses /etc/dnsmasq.d.
 if [ -f /etc/default/dnsmasq ] && grep -q '^CONFIG_DIR=' /etc/default/dnsmasq; then
   grep -q 'dnsmasq.d' /etc/default/dnsmasq || echo 'CONFIG_DIR=/etc/dnsmasq.d,.dpkg-dist,.dpkg-old,.dpkg-new' >> /etc/default/dnsmasq

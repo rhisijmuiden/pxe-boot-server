@@ -24,6 +24,8 @@ git config --system --get-all safe.directory 2>/dev/null | grep -qx "$REPO" || g
 step "packages"
 # wimlib reads the Windows editions from install.wim / install.esd / install.swm
 command -v wimlib-imagex >/dev/null || apt-get -o DPkg::Lock::Timeout=600 install -y -q --no-install-recommends wimtools || echo "wimtools could not be installed; Windows editions will not be listed"
+# 7-Zip unpacks ISOs where loop devices are unavailable (LXC containers)
+command -v 7z >/dev/null || command -v 7zz >/dev/null || apt-get -o DPkg::Lock::Timeout=600 install -y -q --no-install-recommends 7zip || echo "7zip could not be installed; ISOs cannot be unpacked inside a container"
 
 step "python environment"
 [ -x "$REPO/venv/bin/python" ] || python3 -m venv "$REPO/venv"

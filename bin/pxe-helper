@@ -37,6 +37,66 @@ host() {
   fi
 }
 
+# Loop devices left behind by ISOs that are no longer mounted (a lazy umount that never
+# finished, a crashed mount, a file that was replaced or deleted). They are detached so they
+# cannot exhaust the pool; devices that are still mounted somewhere are left alone.
+free_stale_loops() {
+  local mounted name back
+  mounted="$(host findmnt -rn -o SOURCE 2>/dev/null || true)"
+  while read -r name back; do
+    [ -n "$name" ] || continue
+    [[ "$back" == "$ISO_DIR"/* ]] || continue
+    grep -qxF -- "$name" <<<"$mounted" && continue
+    host losetup -d "$name" 2>/dev/null || true
+  done < <(host losetup -l -n --raw -O NAME,BACK-FILE 2>/dev/null || true)
+}
+
+# Explain why no loop device could be set up, in words the web UI can show.
+loop_diagnosis() {
+  if ! host test -d "/lib/modules/$(uname -r)"; then
+    echo "kernel modules for the running kernel are missing (kernel updated without reboot?): reboot the server"
+  elif ! host test -e /dev/loop-control; then
+    echo "no /dev/loop-control: the loop module is not loaded or this system runs in a container without loop devices"
+  elif ! host losetup -f >/dev/null 2>&1; then
+    echo "no free loop device (all $(host losetup -l -n 2>/dev/null | wc -l) are in use)"
+  fi
+}
+
+EXTRACT_MARK=.pxe-extracted
+
+# Without loop devices (an LXC container, where block filesystems cannot be mounted at all)
+# the ISO is unpacked into the mount directory instead. The marker records which file
+# version was unpacked, so an unchanged ISO is not unpacked twice.
+extract_iso() {
+  local iso="$1" dir="$2" stamp tmp need avail sz
+  sz="$(command -v 7zz || command -v 7z || true)"
+  [ -n "$sz" ] || { echo "7-Zip is not installed (apt install 7zip)"; return 1; }
+  stamp="$(stat -c '%s %Y' -- "$iso")"
+  if [ -f "$dir/$EXTRACT_MARK" ] && [ "$(cat "$dir/$EXTRACT_MARK")" = "$stamp" ]; then return 0; fi
+  need=$(( $(stat -c %s -- "$iso") + 268435456 ))
+  avail="$(df --output=avail -B1 "$MNT_DIR" | tail -1 | tr -d ' ')"
+  if [ "${avail:-0}" -lt "$need" ]; then
+    echo "not enough free disk space to unpack it: $((need / 1048576)) MB needed, $((avail / 1048576)) MB free in $MNT_DIR"
+    return 1
+  fi
+  tmp="$MNT_DIR/.unpack-$(basename "$dir")"
+  rm -rf -- "$tmp"
+  mkdir -p "$tmp"
+  # UDF first: Windows ISOs only show a stub README through ISO 9660.
+  if ! "$sz" x -y -bd -bso0 -bsp0 -tudf -o"$tmp" -- "$iso" >/dev/null 2>&1 || [ -z "$(ls -A "$tmp")" ]; then
+    rm -rf -- "$tmp"; mkdir -p "$tmp"
+    if ! "$sz" x -y -bd -bso0 -bsp0 -o"$tmp" -- "$iso" >/dev/null 2>&1; then
+      rm -rf -- "$tmp"
+      echo "7-Zip could not unpack the ISO"
+      return 1
+    fi
+  fi
+  chmod -R u=rwX,go=rX -- "$tmp"
+  printf '%s' "$stamp" > "$tmp/$EXTRACT_MARK"
+  rm -rf -- "$dir"
+  mv -- "$tmp" "$dir"
+}
+
 cmd_mount() {
   local rel="${1:?relpath}" id="${2:?id}"
   is_id "$id" || die "bad id"
@@ -46,9 +106,26 @@ cmd_mount() {
   local dir="$MNT_DIR/$id"
   mkdir -p "$dir"
   host mountpoint -q "$dir" && return 0
-  # UDF first: Windows ISOs only show a stub README through ISO 9660.
-  host mount -t udf -o loop,ro,nodev,nosuid,noexec -- "$iso" "$dir" 2>/dev/null || \
-    host mount -o loop,ro,nodev,nosuid,noexec -- "$iso" "$dir"
+  if [ -f "$dir/$EXTRACT_MARK" ] || [ "${PXE_ISO_MODE:-auto}" = extract ]; then
+    local out; out="$(extract_iso "$iso" "$dir")" || die "Could not unpack ISO: $out"
+    return 0
+  fi
+  host modprobe -q loop 2>/dev/null || true
+  host modprobe -q udf 2>/dev/null || true
+  host modprobe -q isofs 2>/dev/null || true
+  local try err=""
+  for try in 1 2; do
+    # UDF first: Windows ISOs only show a stub README through ISO 9660.
+    if host mount -t udf -o loop,ro,nodev,nosuid,noexec -- "$iso" "$dir" 2>/dev/null; then return 0; fi
+    if err="$(host mount -o loop,ro,nodev,nosuid,noexec -- "$iso" "$dir" 2>&1)"; then return 0; fi
+    [[ "$err" == *"loop device"* ]] || break
+    free_stale_loops
+  done
+  # Loop mounting is not possible here (container) or failed: unpack the ISO instead.
+  local out
+  if out="$(extract_iso "$iso" "$dir")"; then return 0; fi
+  local why; why="$(loop_diagnosis)"
+  die "${err:-mount failed}${why:+ ($why)}; unpacking instead also failed: $out"
 }
 
 cmd_umount() {
@@ -56,6 +133,8 @@ cmd_umount() {
   is_id "$id" || die "bad id"
   local dir="$MNT_DIR/$id"
   if host mountpoint -q "$dir"; then host umount "$dir" 2>/dev/null || host umount -l "$dir"; fi
+  if [ -f "$dir/$EXTRACT_MARK" ] && ! host mountpoint -q "$dir"; then rm -rf -- "$dir"; fi
+  rm -rf -- "$MNT_DIR/.unpack-$id"
   rmdir "$dir" 2>/dev/null || true
 }
 
