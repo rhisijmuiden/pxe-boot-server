@@ -316,6 +316,21 @@ def autoboot_script(server_ip: str, ctx: dict, rule: dict, row, answer=None) -> 
     return "\n".join(lines)
 
 
+def autoboot_example(server_ip: str, ctx: dict) -> str:
+    """The auto-boot screen with an example machine, for the preview in the web interface.
+    Prefers an unattended install, so the install plan shows too."""
+    rows = {r["id"]: r for r in isos.list_isos() if r["enabled"] and r["status"] == "ready"}
+    answer = next((a for a in answers_mod.list_answers() if a["status"] == "ready" and a["iso_id"] in rows), None)
+    if answer is not None:
+        row = rows[answer["iso_id"]]
+    elif rows:
+        row = next(iter(sorted(rows.values(), key=lambda r: r["name"].lower())))
+    else:
+        row = {"id": 0, "name": "Ubuntu Server 24.04"}
+    rule = {"machine": {"name": "example-pc"}, "group": None, "mode": "once", "source": "machine"}
+    return autoboot_script(server_ip, ctx, rule, row, answer)
+
+
 def _parents(folder: str) -> list[str]:
     parts = folder.split("/")
     return ["/".join(parts[:i]) for i in range(1, len(parts))]

@@ -84,7 +84,10 @@ S = {
 "bm_sub": ("This is what a client sees on screen after it starts from the network.", "Dit ziet een client op het scherm nadat hij via het netwerk start."),
 "bm_title": ("Menu title", "Menutitel"), "bm_default": ("Default entry", "Standaardkeuze"), "bm_timeout": ("Timeout in seconds", "Wachttijd in seconden"),
 "bm_timeout_hint": ("0 waits until someone chooses.", "Bij 0 wacht het menu tot iemand kiest."), "local": ("Boot from local disk", "Start vanaf lokale schijf"),
-"bm_preview_note": ("Folders open as submenus. Use the arrow keys and Enter on the client.", "Mappen openen als submenu. Gebruik op de client de pijltjestoetsen en Enter."),
+"bm_preview": ("Boot screen preview", "Voorbeeld van het bootscherm"), "bm_screen": ("Screen", "Scherm"), "bm_firmware": ("Firmware", "Firmware"),
+"bm_screen_menu": ("Boot menu", "Bootmenu"), "bm_screen_auto": ("Auto-boot screen", "Auto-bootscherm"),
+"js_bm_note_menu": ("Live preview with example client details. Click the preview, then use the arrow keys and Enter (or double-click) to open folders and System info, Esc goes back.", "Live voorbeeld met voorbeeldgegevens van een client. Klik in het voorbeeld en gebruik de pijltjestoetsen en Enter (of dubbelklik) om mappen en System info te openen, Esc gaat terug."),
+"js_bm_note_auto": ("Machines with a 'Next boot only' or 'Every boot' rule see this screen for 5 seconds before the chosen ISO starts. Shown here for an example machine.", "Machines met een regel 'Alleen volgende boot' of 'Elke boot' zien dit scherm 5 seconden voordat de gekozen ISO start. Hier getoond voor een voorbeeldmachine."),
 "bm_show_script": ("Show the iPXE script", "Toon het iPXE-script"),
 # answers
 "ans_sub": ("Install Linux and Proxmox without questions. Build an answer file with the wizard, link it to an ISO and it gets its own entry in the boot menu.", "Installeer Linux en Proxmox zonder vragen. Maak een antwoordbestand met de wizard, koppel het aan een ISO en het krijgt een eigen regel in het bootmenu."),
