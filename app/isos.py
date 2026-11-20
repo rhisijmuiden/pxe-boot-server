@@ -79,6 +79,9 @@ def ci_glob(root: Path, rel_dir: str, prefix: str) -> list[str]:
         return []
 
 
+EXTRACT_MARK = ".pxe-extracted"
+
+
 def mount_dir(iso_id: int) -> Path:
     return config.MNT_DIR / str(iso_id)
 
@@ -87,13 +90,15 @@ def is_mounted(iso_id: int) -> bool:
     d = mount_dir(iso_id)
     if config.DEV:
         return d.is_dir() and any(d.iterdir())
-    return os.path.ismount(d)
+    # Inside an LXC container the helper unpacks the ISO instead of loop-mounting it.
+    return os.path.ismount(d) or (d / EXTRACT_MARK).is_file()
 
 
 def mount(row) -> None:
     if is_mounted(row["id"]):
         return
-    system.helper("mount", row["relpath"], str(row["id"]))
+    # Unpacking a large ISO (when loop devices are unavailable) can take several minutes.
+    system.helper("mount", row["relpath"], str(row["id"]), timeout=3600)
 
 
 def umount(iso_id: int) -> None:

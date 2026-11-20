@@ -101,5 +101,6 @@
   <li><strong>Client shows the menu but you want local disk</strong>: set the default entry to "Boot from local disk" in Boot menu; it is used after the timeout.</li>
   <li><strong>Keyboard does not work in the UEFI boot menu</strong>: use <code>snponly.efi</code> as UEFI loader in Network &amp; PXE (the default). <code>ipxe.efi</code> brings its own drivers and on many PCs the firmware's USB keyboard support stops while it runs. If a client gets no network with <code>snponly.efi</code>, switch to <code>ipxe.efi</code>. Legacy BIOS clients use <code>undionly.kpxe</code>, which keeps the BIOS keyboard.</li>
   <li><strong>Proxmox VE VM does not boot over the network with UEFI</strong>: give the VM an EFI disk in the 2MB OVMF format. In our tests the 4MB format did not boot from the network. Legacy BIOS (SeaBIOS) VMs work as they are.</li>
+  <li><strong>Running in an LXC container (Proxmox)</strong>: containers cannot loop-mount ISOs ("failed to setup loop device"). The server then unpacks each ISO with 7-Zip into <code>/srv/pxe/mnt</code> automatically. That needs free disk space equal to the ISO size and takes a few minutes for a large Windows ISO; the library shows "mounting" meanwhile. Give the container enough disk, or run the server in a VM to boot straight from the ISO file.</li>
 </ul>
 </div></div>
