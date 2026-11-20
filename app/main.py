@@ -710,9 +710,13 @@ def menu_page(request: Request):
 
 
 @app.get("/api/menu/preview")
-def api_menu_preview(request: Request, platform: str = "efi"):
+def api_menu_preview(request: Request, platform: str = "efi", screen: str = "menu"):
+    """The iPXE script behind the boot screen preview: the full menu, or the auto-boot screen that
+    machines with a once/always rule get (shown with an example machine)."""
     auth.require_user(request)
     ctx = {"mac": "", "platform": "efi" if platform == "efi" else "pcbios", "arch": "x86_64"}
+    if screen == "auto":
+        return PlainTextResponse(ipxe.autoboot_example(system.server_ip(), ctx))
     return PlainTextResponse(ipxe.menu_script(system.server_ip(), ctx))
 
 

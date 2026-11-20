@@ -105,3 +105,12 @@ def test_linux_boot_adds_distribution_shim(iso_row):
     text = ipxe.boot_script("10.0.0.5", row, {"platform": "efi", "mac": ""})
     assert f"iseq ${{platform}} efi && shim http://10.0.0.5/mnt/{row['id']}/EFI/BOOT/BOOTx64.EFI ||" in text
     assert text.index("shim ") < text.index("boot ||")
+
+
+def test_autoboot_example_for_preview(iso_row):
+    """The boot screen preview shows the auto-boot screen with an example machine."""
+    iso_row({"casper/vmlinuz": "", "casper/initrd": ""}, "preview-ubuntu.iso")
+    s = ipxe.autoboot_example("10.0.0.5", CTX)
+    assert "Recognised as example-pc" in s
+    assert "item auto " in s and "NEXT BOOT" in s
+    assert "item --key m full" in s
