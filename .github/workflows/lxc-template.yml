@@ -68,7 +68,9 @@ jobs:
           # Proxmox writes these when it creates a container.
           echo "nameserver 1.1.1.1" | sudo tee rootfs/etc/resolv.conf >/dev/null
           sudo systemctl stop nginx apache2 2>/dev/null || true
-          sudo systemd-run --unit pxe-ct systemd-nspawn -q -D "$PWD/rootfs" -M pxect -b
+          # An LXC container has CAP_NET_ADMIN in its own network namespace; nspawn drops it on the
+          # host network unless asked (dnsmasq needs it for DHCP).
+          sudo systemd-run --unit pxe-ct systemd-nspawn -q -D "$PWD/rootfs" -M pxect --capability=CAP_NET_ADMIN,CAP_NET_RAW -b
           for i in $(seq 1 120); do
             sudo test -e rootfs/etc/pxe-boot-server/initial-admin && ! sudo test -e rootfs/etc/pxe-boot-server/firstboot && break
             sleep 2
@@ -79,7 +81,10 @@ jobs:
           echo "--- banner"; sudo cat rootfs/etc/issue.d/pxe-boot-server.issue | sed 's/Password: .*/Password: <generated>/'
       - name: Container log
         if: always()
-        run: sudo journalctl -M pxect -b --no-pager -n 200 2>/dev/null || sudo journalctl -u pxe-ct --no-pager -n 200 || true
+        run: |
+          sudo journalctl -M pxect -b --no-pager -u pxe-boot-server-firstboot -u pxe-boot-server -u nginx -u smbd -n 150 2>/dev/null || true
+          sudo journalctl -M pxect -b --no-pager -u dnsmasq -n 20 2>/dev/null || true
+          sudo journalctl -u pxe-ct --no-pager -n 100 || true
 
   release:
     needs: smoke-test
