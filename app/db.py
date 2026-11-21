@@ -194,6 +194,7 @@ DEFAULTS: dict[str, Any] = {
     "proxmox": {"host": "", "token_id": "", "secret": "", "verify": False,
                 "node": "", "storage": "", "bridge": "vmbr0"},
     "update_channel": "main",
+    "onboarding": False,       # True after install.sh created the admin: the first-run wizard opens after sign-in
     "smb_password": "",
     "traffic_daily": {},
 }

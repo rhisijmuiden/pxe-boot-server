@@ -127,6 +127,11 @@ async def _login_required(request: Request, exc: auth.LoginRequired):
     return RedirectResponse("/login?next=" + quote(request.url.path), status_code=303)
 
 
+@app.exception_handler(auth.OnboardingRequired)
+async def _onboarding_required(request: Request, exc: auth.OnboardingRequired):
+    return RedirectResponse("/welcome", status_code=303)
+
+
 async def form_csrf(request: Request) -> dict:
     form = await request.form()
     auth.check_csrf(request, form.get("csrf"))
@@ -307,6 +312,58 @@ async def setup_post(request: Request):
     if form.get("server_name"):
         db.set_setting("server_name", form["server_name"].strip()[:64])
     request.session["uid"] = uid
+    return RedirectResponse("/network?welcome=1", status_code=303)
+
+
+@app.get("/welcome")
+def welcome_page(request: Request):
+    """First-run wizard after install.sh created the admin account with a generated password."""
+    user = auth.require_admin(request)
+    if not db.get_setting("onboarding"):
+        return RedirectResponse("/", status_code=303)
+    itfs = [i for i in system.interfaces() if not i.get("vlan")]
+    selected = db.get_setting("interfaces") or []
+    return render(request, "welcome.html", {"me": user, "itfs": itfs, "selected": selected})
+
+
+@app.post("/welcome")
+async def welcome_post(request: Request):
+    user = auth.require_admin(request)
+    form = await request.form()
+    auth.check_csrf(request, form.get("csrf"))
+    if not db.get_setting("onboarding"):
+        return RedirectResponse("/", status_code=303)
+    pw = form.get("password", "")
+    username = str(form.get("username", "")).strip().lower()
+    if len(pw) < 8 or pw != form.get("password2") or auth.verify_password(pw, user["password_hash"]):
+        flash(request, "err_welcome_pw", "error")
+        return RedirectResponse("/welcome", status_code=303)
+    if not re.fullmatch(r"[a-z0-9._-]{2,32}", username) or \
+            db.q1("SELECT id FROM users WHERE username=? AND id<>?", username, user["id"]):
+        flash(request, "err_username", "error")
+        return RedirectResponse("/welcome", status_code=303)
+    lang = form.get("lang") if form.get("lang") in i18n.LANGS else "en"
+    db.run("UPDATE users SET username=?, name=?, email=?, lang=?, password_hash=? WHERE id=?", username,
+           str(form.get("name", "")).strip()[:80], str(form.get("email", "")).strip()[:120], lang,
+           auth.hash_password(pw), user["id"])
+    db.set_setting("default_lang", lang)
+    if str(form.get("server_name", "")).strip():
+        db.set_setting("server_name", str(form["server_name"]).strip()[:64])
+    names = {i["name"] for i in system.interfaces()}
+    chosen = [n for n in form.getlist("interfaces") if n in names]
+    if chosen:
+        db.set_setting("interfaces", chosen)
+    db.set_setting("onboarding", False)
+    try:
+        dnsmasq.apply()
+    except system.HelperError as exc:
+        flash(request, "err_apply", "error", detail=str(exc))
+    try:
+        # The generated password was shown on the console; it is no longer valid, so remove it there.
+        system.helper("clear-credentials")
+    except system.HelperError as exc:
+        log.warning("could not clear the install credentials: %s", exc)
+    flash(request, "welcome_done")
     return RedirectResponse("/network?welcome=1", status_code=303)
 
 

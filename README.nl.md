@@ -34,10 +34,32 @@ Een netwerkbootserver voor Debian 13 die werkt als Ventoy via het netwerk. Uploa
 
 ## Installeren
 
-Op een verse **Debian 13 (trixie)**-server of VM, als root:
+Twee manieren: de installer op een kale **Debian 13 (trixie)** (hardware, VM of LXC-container), of de kant-en-klare **Proxmox LXC-template**.
+
+### Proxmox LXC-template
+
+In Proxmox: opslag **local** > **CT Templates** > **Download from URL**, plak dit adres, klik op **Query URL** en daarna **Download**:
+
+```
+https://github.com/rhisijmuiden/pxe-boot-server/releases/latest/download/pxe-boot-server-debian-13-amd64.tar.zst
+```
+
+Maak de container aan met die template (unprivileged, **Nesting** aan, netwerk op de bridge waar je clients van opstarten, 100 GB schijf) en start hem. De console toont dan alleen het webadres, de gebruikersnaam en een gegenereerd wachtwoord. Of alles in één commando op de Proxmox-host:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/rhisijmuiden/pxe-boot-server/main/lxc/proxmox-create-ct.sh)
+```
+
+Alle containeropties en de beperkingen van LXC: [docs/proxmox-lxc.nl.md](docs/proxmox-lxc.nl.md).
+
+### Installer op Debian 13
+
+Op een kale Debian 13-server, VM of LXC-container, als root:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/rhisijmuiden/pxe-boot-server/main/install.sh | bash
+# minimale installatie zonder curl:
+wget -qO- https://raw.githubusercontent.com/rhisijmuiden/pxe-boot-server/main/install.sh | bash
 ```
 
 Opties geef je mee na `bash -s --`:
@@ -47,7 +69,17 @@ Opties geef je mee na `bash -s --`:
 curl -fsSL https://raw.githubusercontent.com/rhisijmuiden/pxe-boot-server/main/install.sh | bash -s -- --channel test --interface eth1
 ```
 
-Open daarna `http://<server-ip>/` en maak het eerste beheerdersaccount aan.
+Aan het eind zie je alleen wat je nodig hebt om in te loggen:
+
+```
+PXE Boot Server 1.7.0 is ready
+
+  URL:      http://192.168.1.20:80/
+  Username: admin
+  Password: 7kQm-x3Pd-Rt9v-Lw2a
+```
+
+Bij de eerste keer inloggen opent een korte wizard: kies je eigen wachtwoord, je naam en e-mail, de servernaam, de taal en het netwerk waarop clients opstarten. Al het andere stel je in via de webinterface. De gegevens blijven ook op het inlogscherm van de console staan tot de wizard klaar is. Wachtwoord kwijt? Draai `pxe-reset-admin` als root op de server.
 
 **Vereisten**: Debian 13, amd64, een vast IP-adres (of een DHCP-reservering) en genoeg schijfruimte onder `/srv/pxe` voor je ISO's. Op de clients moet **Secure Boot uit** staan (iPXE en wimboot zijn niet door Microsoft ondertekend).
 
@@ -60,7 +92,7 @@ Open daarna `http://<server-ip>/` en maak het eerste beheerdersaccount aan.
 - Maakt de gebruikers `pxeboot` (draait de webapp) en `pxe` (alleen-lezen Windows-share).
 - Zet de iPXE-bootbestanden in `/srv/pxe/tftp`, downloadt `wimboot` en stelt nginx, Samba, dnsmasq (proxy DHCP op de netwerkkaart met de standaardroute) en systemd in.
 
-Je kunt de installer veilig opnieuw draaien; hij werkt dan de code en de configuratie bij.
+Je kunt de installer veilig opnieuw draaien; hij werkt dan de code en de configuratie bij en laat de bestaande accounts staan.
 
 ## Zo werkt het
 

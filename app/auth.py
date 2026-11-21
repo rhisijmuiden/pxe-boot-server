@@ -80,10 +80,17 @@ class LoginRequired(Exception):
     pass
 
 
+class OnboardingRequired(Exception):
+    """An administrator signed in with the generated password and has not finished the first-run wizard."""
+
+
 def require_user(request: Request):
     user = current_user(request)
     if user is None:
         raise LoginRequired()
+    if (user["role"] == "admin" and request.method == "GET" and request.url.path != "/welcome"
+            and not request.url.path.startswith("/api/") and db.get_setting("onboarding")):
+        raise OnboardingRequired()
     return user
 
 

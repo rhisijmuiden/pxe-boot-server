@@ -1,0 +1,114 @@
+name: LXC template
+
+# Builds the Proxmox LXC template (Debian 13 + PXE Boot Server), boots it once as a smoke test
+# and publishes it on the GitHub release of the current version. The newest one always has the
+# same address, for Proxmox "CT Templates > Download from URL":
+#   https://github.com/rhisijmuiden/pxe-boot-server/releases/latest/download/pxe-boot-server-debian-13-amd64.tar.zst
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Branch the template installs (main or test)
+        default: main
+  push:
+    branches: [main]
+    paths: ["VERSION"]
+  pull_request:
+    paths: ["lxc/**", "install.sh", "deploy/**", ".github/workflows/lxc-template.yml"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: lxc-template-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CHANNEL: ${{ github.event.inputs.channel || 'main' }}
+  FILE: pxe-boot-server-debian-13-amd64.tar.zst
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:trixie
+      options: --privileged
+    steps:
+      - name: Build tools
+        run: apt-get update -q && apt-get install -y -q --no-install-recommends mmdebstrap zstd git ca-certificates curl
+      - uses: actions/checkout@v4
+      - name: Build template
+        env:
+          PXE_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: bash lxc/build-template.sh --channel "$CHANNEL" --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lxc-template
+          path: dist/
+          retention-days: 7
+          compression-level: 0
+
+  # Boot the template with systemd-nspawn: the first boot must create the admin account and
+  # serve the web interface.
+  smoke-test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: lxc-template
+          path: dist
+      - name: Boot the container
+        run: |
+          set -euo pipefail
+          sudo apt-get update -q && sudo apt-get install -y -q systemd-container zstd
+          (cd dist && sha256sum -c "$FILE.sha256")
+          sudo mkdir rootfs
+          zstd -dc "dist/$FILE" | sudo tar -x --numeric-owner -C rootfs
+          # Proxmox writes these when it creates a container.
+          echo "nameserver 1.1.1.1" | sudo tee rootfs/etc/resolv.conf >/dev/null
+          sudo systemctl stop nginx apache2 2>/dev/null || true
+          # An LXC container has CAP_NET_ADMIN in its own network namespace; nspawn drops it on the
+          # host network unless asked (dnsmasq needs it for DHCP).
+          sudo systemd-run --unit pxe-ct systemd-nspawn -q -D "$PWD/rootfs" -M pxect --capability=CAP_NET_ADMIN,CAP_NET_RAW -b
+          for i in $(seq 1 120); do
+            sudo test -e rootfs/etc/pxe-boot-server/initial-admin && ! sudo test -e rootfs/etc/pxe-boot-server/firstboot && break
+            sleep 2
+          done
+          sudo cat rootfs/etc/pxe-boot-server/initial-admin | sed 's/^password=.*/password=<generated>/'
+          sudo grep -q '^password=....-....-....-....$' rootfs/etc/pxe-boot-server/initial-admin
+          curl -fsS http://127.0.0.1:80/login | grep -q 'name="password"'
+          echo "--- banner"; sudo cat rootfs/etc/issue.d/pxe-boot-server.issue | sed 's/Password: .*/Password: <generated>/'
+      - name: Container log
+        if: always()
+        run: |
+          sudo journalctl -M pxect -b --no-pager -u pxe-boot-server-firstboot -u pxe-boot-server -u nginx -u smbd -n 150 2>/dev/null || true
+          sudo journalctl -M pxect -b --no-pager -u dnsmasq -n 20 2>/dev/null || true
+          sudo journalctl -u pxe-ct --no-pager -n 100 || true
+
+  release:
+    needs: smoke-test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: lxc-template
+          path: dist
+      - name: Publish
+        if: env.CHANNEL == 'main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          VERSION="$(cat dist/VERSION)"
+          TAG="v$VERSION"
+          URL="https://github.com/$GH_REPO/releases/latest/download/$FILE"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            printf 'Proxmox LXC template with Debian 13 and PXE Boot Server %s.\n\nProxmox: storage **local** > **CT Templates** > **Download from URL**, paste:\n\n```\n%s\n```\n\nSee [docs/proxmox-lxc.md](https://github.com/%s/blob/main/docs/proxmox-lxc.md).\n' \
+              "$VERSION" "$URL" "$GH_REPO" > notes.md
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "PXE Boot Server $VERSION" --notes-file notes.md --latest
+          fi
+          gh release upload "$TAG" "dist/$FILE" "dist/$FILE.sha256" --clobber
+          echo "Published $URL"

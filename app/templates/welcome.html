@@ -1,0 +1,22 @@
+{% extends "auth_base.html" %}
+{% block title %}{{ t('setup_title') }}{% endblock %}
+{% block content %}
+<div><h1>{{ t('setup_title') }}</h1><p>{{ t('welcome_sub') }}</p></div>
+<form method="post" action="/welcome" style="display:flex;flex-direction:column;gap:14px">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <h2 class="small" style="margin:6px 0 0">{{ t('welcome_account') }}</h2>
+  <div class="field"><label for="name">{{ t('your_name') }}</label><input class="input" id="name" name="name" value="{{ me.name }}" autocomplete="name"></div>
+  <div class="field"><label for="username">{{ t('username') }}</label><input class="input" id="username" name="username" value="{{ me.username }}" required autocomplete="username"></div>
+  <div class="field"><label for="email">{{ t('email') }}</label><input class="input" id="email" name="email" type="email" value="{{ me.email }}"><span class="hint">{{ t('email_hint') }}</span></div>
+  <div class="field"><label for="password">{{ t('new_password') }}</label><input class="input" id="password" name="password" type="password" minlength="8" required autocomplete="new-password"><span class="hint">{{ t('welcome_pw_hint') }}</span></div>
+  <div class="field"><label for="password2">{{ t('password_repeat') }}</label><input class="input" id="password2" name="password2" type="password" minlength="8" required autocomplete="new-password"></div>
+  <h2 class="small" style="margin:6px 0 0">{{ t('welcome_server') }}</h2>
+  <div class="field"><label for="server_name">{{ t('srvname') }}</label><input class="input" id="server_name" name="server_name" value="{{ server_name }}"></div>
+  <div class="field"><label for="lang">{{ t('deflang') }}</label><select class="input" id="lang" name="lang">{% for c, n in LANGS.items() %}<option value="{{ c }}" {{ 'selected' if c == lang }}>{{ n }}</option>{% endfor %}</select></div>
+  <div class="field"><label>{{ t('iface') }}</label>
+    {% for i in itfs %}<label class="check-row"><input type="checkbox" name="interfaces" value="{{ i.name }}" {{ 'checked' if i.name in selected }}>
+      <span><b>{{ i.name }}</b> <span class="note num">{{ i.addrs|join(', ') or t('no_ipv4') }}</span></span></label>{% endfor %}
+    <span class="hint">{{ t('welcome_iface_hint') }}</span></div>
+  <button class="btn btn-accent btn-block" type="submit">{{ t('welcome_go') }}</button>
+</form>
+{% endblock %}

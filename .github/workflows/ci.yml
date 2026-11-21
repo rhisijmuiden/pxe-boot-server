@@ -26,5 +26,5 @@ jobs:
         run: python -m pytest -q tests
       - name: Shell scripts
         run: |
-          bash -n install.sh bin/pxe-helper deploy/post-update.sh ipxe/build.sh
-          shellcheck -S warning install.sh bin/pxe-helper deploy/post-update.sh ipxe/build.sh
+          bash -n install.sh bin/pxe-helper bin/pxe-reset-admin deploy/post-update.sh deploy/first-run.sh deploy/motd.sh lxc/build-template.sh lxc/proxmox-create-ct.sh ipxe/build.sh
+          shellcheck -S warning install.sh bin/pxe-helper bin/pxe-reset-admin deploy/post-update.sh deploy/first-run.sh deploy/motd.sh lxc/build-template.sh lxc/proxmox-create-ct.sh ipxe/build.sh
