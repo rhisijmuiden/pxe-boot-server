@@ -1,0 +1,19 @@
+[Unit]
+Description=PXE Boot Server first boot (administrator account and network)
+# Only in the Proxmox LXC template: install.sh --image leaves this marker behind.
+ConditionPathExists=/etc/pxe-boot-server/firstboot
+Wants=network-online.target
+After=network-online.target nginx.service smbd.service pxe-boot-server.service
+# Hold the console login prompt until the banner with the sign-in details is written.
+Before=ssh.service getty@tty1.service console-getty.service container-getty@1.service container-getty@2.service
+
+[Service]
+Type=oneshot
+ExecStartPre=-/usr/bin/ssh-keygen -A
+ExecStart=/opt/pxe-boot-server/deploy/first-run.sh --firstboot
+RemainAfterExit=yes
+StandardOutput=journal+console
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Give an administrator a new generated password (run as root on the server).
+#
+#   pxe-reset-admin [username]     default: the first administrator
+#
+# The next sign-in opens the first-run wizard again, where a password of your own is chosen.
+set -euo pipefail
+REPO="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+[ "$(id -u)" = 0 ] || { echo "run as root" >&2; exit 1; }
+WHO="${1:-}"
+[[ -z "$WHO" || "$WHO" =~ ^[A-Za-z0-9._@-]{1,120}$ ]] || { echo "bad username" >&2; exit 1; }
+OUT="$(cd "$REPO" && sudo -u pxeboot env PYTHONDONTWRITEBYTECODE=1 WHO="$WHO" "$REPO/venv/bin/python" - <<'PY'
+import os
+import secrets
+import sys
+from app import auth, db
+who = os.environ["WHO"].lower()
+row = (db.q1("SELECT * FROM users WHERE role='admin' AND (username=? OR lower(email)=?)", who, who) if who
+       else db.q1("SELECT * FROM users WHERE role='admin' ORDER BY id LIMIT 1"))
+if row is None:
+    sys.exit("no such administrator")
+abc = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+pw = "-".join("".join(secrets.choice(abc) for _ in range(4)) for _ in range(4))
+db.run("UPDATE users SET password_hash=? WHERE id=?", auth.hash_password(pw), row["id"])
+db.set_setting("onboarding", True)
+print(f"{row['username']}\t{pw}")
+PY
+)"
+install -d -m 755 /etc/pxe-boot-server
+( umask 077; printf 'username=%s\npassword=%s\n' "${OUT%%$'\t'*}" "${OUT#*$'\t'}" > /etc/pxe-boot-server/initial-admin )
+"$REPO/deploy/first-run.sh" --banner-only
+ip="$(ip -o -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
+echo
+echo "  URL:      http://${ip:-<server-ip>}:80/"
+echo "  Username: ${OUT%%$'\t'*}"
+echo "  Password: ${OUT#*$'\t'}"
+echo

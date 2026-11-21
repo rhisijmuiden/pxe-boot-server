@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
-# PXE Boot Server installer for Debian 13 (trixie).
+# PXE Boot Server installer for a bare Debian 13 (trixie): physical, VM or LXC container.
 #
-#   curl -fsSL https://raw.githubusercontent.com/rhisijmuiden/pxe-boot-server/main/install.sh | sudo bash
+#   As root:  curl -fsSL https://raw.githubusercontent.com/rhisijmuiden/pxe-boot-server/main/install.sh | bash
+#   No curl:  wget -qO- https://raw.githubusercontent.com/rhisijmuiden/pxe-boot-server/main/install.sh | bash
+#
+# At the end it shows only the web address, the username and a generated password; everything
+# else is configured in the web interface.
 #
 # Options (after "bash -s --" when piping):
 #   --channel main|test   branch to install (default: main)
 #   --interface NAME      network interface for PXE (default: the one with the default route)
 #   --force               install on something other than Debian 13
+#   --image               build a Proxmox LXC template (chroot): no services are started,
+#                         the account is created at the container's first boot
 set -euo pipefail
 export LC_ALL=C DEBIAN_FRONTEND=noninteractive
 
@@ -18,26 +24,36 @@ DEST=/opt/pxe-boot-server
 CHANNEL=main
 IFACE=""
 FORCE=0
+IMAGE=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --channel) CHANNEL="${2:?}"; shift 2 ;;
     --interface) IFACE="${2:?}"; shift 2 ;;
     --force) FORCE=1; shift ;;
-    -h|--help) sed -n '2,10p' "$0" 2>/dev/null || true; exit 0 ;;
+    --image) IMAGE=1; shift ;;
+    -h|--help) sed -n '2,16p' "$0" 2>/dev/null || true; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 1 ;;
   esac
 done
 [[ "$CHANNEL" == main || "$CHANNEL" == test ]] || { echo "channel must be main or test" >&2; exit 1; }
 
-c_red=$'\e[31m'; c_grn=$'\e[32m'; c_cyn=$'\e[36m'; c_off=$'\e[0m'
+c_red=$'\e[31m'; c_cyn=$'\e[36m'; c_off=$'\e[0m'
 say() { echo "${c_cyn}==>${c_off} $*"; }
 fail() { echo "${c_red}error:${c_off} $*" >&2; exit 1; }
 
-[ "$(id -u)" = 0 ] || fail "run as root (sudo bash install.sh)"
+[ "$(id -u)" = 0 ] || fail "run as root (su -, then run the command again)"
 . /etc/os-release
 if [ "${ID:-}" != debian ] || [ "${VERSION_ID:-}" != 13 ]; then
   [ "$FORCE" = 1 ] || fail "this installer is made for Debian 13 (found: ${PRETTY_NAME:-unknown}). Use --force to try anyway."
+fi
+
+if [ "$IMAGE" = 0 ]; then
+  [ -d /run/systemd/system ] || fail "systemd is not running. Docker-style containers are not supported; use a VM, an LXC container or real hardware."
+  VIRT="$(systemd-detect-virt -c 2>/dev/null || true)"
+  if [ "$VIRT" = lxc ] || [ "$VIRT" = lxc-libvirt ]; then
+    say "Running in an LXC container: ISOs are unpacked instead of loop-mounted (needs free disk space equal to the ISO size)"
+  fi
 fi
 
 say "Installing packages"
@@ -79,57 +95,28 @@ if [ -d "$DEST/.git" ]; then
 else
   git clone -q --branch "$CHANNEL" "$REPO_URL" "$DEST"
 fi
+# Template builds of a pull request install that exact commit (still tracking $CHANNEL for updates).
+if [ -n "${PXE_REF:-}" ]; then
+  git -C "$DEST" fetch -q origin "$PXE_REF"
+  git -C "$DEST" reset -q --hard FETCH_HEAD
+fi
 
 say "Configuring the system"
 bash "$DEST/deploy/post-update.sh"
 
-FRESH=0
-[ -f /var/lib/pxe-boot-server/app.db ] || FRESH=1
-
-say "Starting services"
-systemctl restart pxe-boot-vlans pxe-boot-server
-for _ in $(seq 1 30); do
-  curl -fs http://127.0.0.1:8080/healthz >/dev/null 2>&1 && break
-  sleep 1
-done
-curl -fs http://127.0.0.1:8080/healthz >/dev/null || fail "the web app did not start; see: journalctl -u pxe-boot-server"
-
-if [ -z "$IFACE" ]; then
-  IFACE="$(ip -o route show default 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')"
-fi
-SMB_PW=""
-if [ "$FRESH" = 1 ] || ! pdbedit -L 2>/dev/null | grep -q '^pxe:'; then
-  SMB_PW="$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 24)"
-  printf '%s\n%s\n' "$SMB_PW" "$SMB_PW" | smbpasswd -s -a pxe >/dev/null
-  smbpasswd -e pxe >/dev/null
+if [ "$IMAGE" = 1 ]; then
+  # Proxmox LXC template: the admin account, the PXE interface and the passwords are made at the
+  # first boot of each container (pxe-boot-server-firstboot.service), not baked into the image.
+  install -d -m 755 /etc/pxe-boot-server
+  echo "$CHANNEL" > /etc/pxe-boot-server/firstboot
+  say "Image prepared ($(cat "$DEST/VERSION"), channel $CHANNEL)"
+  return 0
 fi
 
-say "Applying the PXE configuration"
-cd "$DEST"
-sudo -u pxeboot env PYTHONDONTWRITEBYTECODE=1 CHANNEL="$CHANNEL" IFACE="$IFACE" SMB_PW="$SMB_PW" FRESH="$FRESH" \
-  "$DEST/venv/bin/python" - <<'PY'
-import os
-from app import db, dnsmasq
-db.migrate()
-if os.environ["SMB_PW"]:
-    db.set_setting("smb_password", os.environ["SMB_PW"])
-if os.environ["FRESH"] == "1" and os.environ["IFACE"] and not db.get_setting("interfaces"):
-    db.set_setting("interfaces", [os.environ["IFACE"]])
-if os.environ["FRESH"] == "1":
-    db.set_setting("update_channel", os.environ.get("CHANNEL", "main"))
-dnsmasq.apply()
-PY
-systemctl restart pxe-boot-server
-
-# The web interface is reached on the address of the default route, which can differ from the PXE interface.
-IP="$(ip -o -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
-[ -n "$IP" ] || IP="$(ip -o -4 addr show dev "${IFACE:-lo}" 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -1)"
-echo
-echo "${c_grn}PXE Boot Server $(cat "$DEST/VERSION") is installed.${c_off}"
-echo "  Web interface:  http://${IP:-<server-ip>}/"
-[ "$FRESH" = 1 ] && echo "  Open it to create the first admin account."
-echo "  PXE interface:  ${IFACE:-all} (proxy DHCP, change it under Network & PXE)"
-echo "  Update channel: $CHANNEL"
+say "Starting"
+ARGS=(--channel "$CHANNEL")
+[ -n "$IFACE" ] && ARGS+=(--interface "$IFACE")
+bash "$DEST/deploy/first-run.sh" "${ARGS[@]}"
 }
 
 main "$@"

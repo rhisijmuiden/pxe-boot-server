@@ -18,7 +18,9 @@ install -d -m 755 -o "$APP_USER" -g "$APP_USER" "$SRV/isos" "$SRV/boot" "$SRV/ca
 install -d -m 750 -o "$APP_USER" -g "$APP_USER" "$SRV/uploads" /var/lib/pxe-boot-server
 install -d -m 755 -o "$APP_USER" -g "$APP_USER" /var/log/pxe-boot-server
 chown -R root:root "$REPO"
-chmod 755 "$REPO/bin/pxe-helper" "$REPO/deploy/post-update.sh" "$REPO/install.sh" 2>/dev/null || true
+chmod 755 "$REPO/bin/pxe-helper" "$REPO/bin/pxe-reset-admin" "$REPO/deploy/post-update.sh" "$REPO/deploy/first-run.sh" \
+  "$REPO/deploy/motd.sh" "$REPO/install.sh" 2>/dev/null || true
+ln -sfn "$REPO/bin/pxe-reset-admin" /usr/local/sbin/pxe-reset-admin
 git config --system --get-all safe.directory 2>/dev/null | grep -qx "$REPO" || git config --system --add safe.directory "$REPO"
 
 step "packages"
@@ -98,10 +100,13 @@ fi
 step "systemd units"
 install -m 644 "$REPO/deploy/pxe-boot-server.service" /etc/systemd/system/pxe-boot-server.service
 install -m 644 "$REPO/deploy/pxe-boot-vlans.service" /etc/systemd/system/pxe-boot-vlans.service
+install -m 644 "$REPO/deploy/pxe-boot-server-firstboot.service" /etc/systemd/system/pxe-boot-server-firstboot.service
 install -d /etc/systemd/system/dnsmasq.service.d
 install -m 644 "$REPO/deploy/dnsmasq-override.conf" /etc/systemd/system/dnsmasq.service.d/pxe-boot-server.conf
 systemctl daemon-reload
 systemctl enable -q pxe-boot-server pxe-boot-vlans dnsmasq
+# Only runs when /etc/pxe-boot-server/firstboot exists (the Proxmox LXC template).
+systemctl enable -q pxe-boot-server-firstboot
 
 # Existing install: run database migrations and re-apply the PXE configuration when the
 # new code renders it differently (for example a changed default boot file).

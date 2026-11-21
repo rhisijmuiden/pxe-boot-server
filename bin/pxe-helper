@@ -113,8 +113,8 @@ cmd_mount() {
   host modprobe -q loop 2>/dev/null || true
   host modprobe -q udf 2>/dev/null || true
   host modprobe -q isofs 2>/dev/null || true
-  local try err=""
-  for try in 1 2; do
+  local err=""
+  for _ in 1 2; do
     # UDF first: Windows ISOs only show a stub README through ISO 9660.
     if host mount -t udf -o loop,ro,nodev,nosuid,noexec -- "$iso" "$dir" 2>/dev/null; then return 0; fi
     if err="$(host mount -o loop,ro,nodev,nosuid,noexec -- "$iso" "$dir" 2>&1)"; then return 0; fi
@@ -285,6 +285,13 @@ cmd_do_update() {
   fi
 }
 
+# After the first-run wizard the generated admin password is no longer valid: remove it from the
+# file and the console banner written by deploy/first-run.sh.
+cmd_clear_credentials() {
+  rm -f "$ETC_DIR/initial-admin"
+  [ -x "$REPO/deploy/first-run.sh" ] && "$REPO/deploy/first-run.sh" --banner-only >/dev/null 2>&1 || true
+}
+
 main() {
   local c="${1:-}"; shift || true
   case "$c" in
@@ -299,7 +306,8 @@ main() {
     check-update) cmd_check_update "$@" ;;
     update) cmd_update "$@" ;;
     do-update) cmd_do_update "$@" ;;
-    *) die "usage: pxe-helper {mount|umount|apply-dnsmasq|smbstatus|smb-password|add-vlan|del-vlan|restore-vlans|check-update|update|do-update}" ;;
+    clear-credentials) cmd_clear_credentials ;;
+    *) die "usage: pxe-helper {mount|umount|apply-dnsmasq|smbstatus|smb-password|add-vlan|del-vlan|restore-vlans|check-update|update|do-update|clear-credentials}" ;;
   esac
 }
 main "$@"

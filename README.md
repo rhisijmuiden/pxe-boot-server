@@ -34,10 +34,32 @@ A network boot server for Debian 13 that works like Ventoy over the network. Upl
 
 ## Install
 
-On a fresh **Debian 13 (trixie)** server or VM, as root:
+Two ways: the installer on a bare **Debian 13 (trixie)** (hardware, VM or LXC container), or the ready-made **Proxmox LXC template**.
+
+### Proxmox LXC template
+
+In Proxmox: storage **local** > **CT Templates** > **Download from URL**, paste this address and click **Query URL**, then **Download**:
+
+```
+https://github.com/rhisijmuiden/pxe-boot-server/releases/latest/download/pxe-boot-server-debian-13-amd64.tar.zst
+```
+
+Create the container from that template (unprivileged, **Nesting** on, network on the bridge your clients boot from, 100 GB disk) and start it. The console then shows only the web address, the username and a generated password. Or do it all in one command on the Proxmox host:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/rhisijmuiden/pxe-boot-server/main/lxc/proxmox-create-ct.sh)
+```
+
+All container options and LXC limits: [docs/proxmox-lxc.md](docs/proxmox-lxc.md).
+
+### Installer on Debian 13
+
+On a bare Debian 13 server, VM or LXC container, as root:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/rhisijmuiden/pxe-boot-server/main/install.sh | bash
+# minimal install without curl:
+wget -qO- https://raw.githubusercontent.com/rhisijmuiden/pxe-boot-server/main/install.sh | bash
 ```
 
 Options, passed after `bash -s --`:
@@ -47,7 +69,17 @@ Options, passed after `bash -s --`:
 curl -fsSL https://raw.githubusercontent.com/rhisijmuiden/pxe-boot-server/main/install.sh | bash -s -- --channel test --interface eth1
 ```
 
-Then open `http://<server-ip>/` and create the first administrator account.
+At the end it shows only what you need to sign in:
+
+```
+PXE Boot Server 1.7.0 is ready
+
+  URL:      http://192.168.1.20:80/
+  Username: admin
+  Password: 7kQm-x3Pd-Rt9v-Lw2a
+```
+
+The first sign-in opens a short wizard: choose your own password, your name and email, the server name, the language and the network clients boot from. Everything else is configured in the web interface. The details also stay on the console login screen until the wizard is done. Lost the password? Run `pxe-reset-admin` as root on the server.
 
 **Requirements**: Debian 13, amd64, a static IP address (or a DHCP reservation), and enough disk space under `/srv/pxe` for your ISOs. Clients need **Secure Boot switched off** (iPXE and wimboot are not signed by Microsoft).
 
@@ -60,7 +92,7 @@ Then open `http://<server-ip>/` and create the first administrator account.
 - Creates the users `pxeboot` (runs the web app) and `pxe` (read-only Windows share).
 - Copies the iPXE boot files to `/srv/pxe/tftp`, downloads `wimboot`, configures nginx, Samba, dnsmasq (proxy DHCP on the interface with the default route) and systemd.
 
-Running the installer again is safe; it updates the code and the configuration.
+Running the installer again is safe; it updates the code and the configuration and keeps the existing accounts.
 
 ## How it works
 
